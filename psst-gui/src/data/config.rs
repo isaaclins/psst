@@ -116,6 +116,8 @@ pub struct Config {
     pub oauth_refresh_token: Option<String>,
     pub audio_quality: AudioQuality,
     pub theme: Theme,
+    #[serde(default)]
+    pub custom_theme: CustomTheme,
     pub volume: f64,
     pub last_route: Option<Nav>,
     pub queue_behavior: QueueBehavior,
@@ -141,6 +143,7 @@ impl Default for Config {
             oauth_refresh_token: None,
             audio_quality: Default::default(),
             theme: Default::default(),
+            custom_theme: Default::default(),
             volume: 1.0,
             last_route: Default::default(),
             queue_behavior: Default::default(),
@@ -283,10 +286,32 @@ impl Default for AudioQuality {
     }
 }
 
+#[derive(Clone, Debug, Data, Lens, Serialize, Deserialize, Eq, PartialEq)]
+pub struct CustomTheme {
+    pub background: String,
+    pub surface: String,
+    pub primary_text: String,
+    pub accent: String,
+    pub highlight: String,
+}
+
+impl Default for CustomTheme {
+    fn default() -> Self {
+        Self {
+            background: "#1c1c1f".into(),
+            surface: "#242429".into(),
+            primary_text: "#f2f2f2".into(),
+            accent: "#1db954".into(),
+            highlight: "#3a7bd5".into(),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Data, Serialize, Deserialize)]
 pub enum Theme {
     Light,
     Dark,
+    Custom,
 }
 
 impl Default for Theme {

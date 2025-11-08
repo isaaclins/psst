@@ -36,7 +36,9 @@ impl<W: Widget<AppState>> Widget<AppState> for ThemeScope<W> {
     }
 
     fn update(&mut self, ctx: &mut UpdateCtx, old_data: &AppState, data: &AppState, env: &Env) {
-        if !data.config.theme.same(&old_data.config.theme) {
+        if !data.config.theme.same(&old_data.config.theme)
+            || !data.config.custom_theme.same(&old_data.config.custom_theme)
+        {
             self.set_env(data, env);
             ctx.request_layout();
             ctx.request_paint();

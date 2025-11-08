@@ -37,7 +37,9 @@ pub use crate::data::{
     artist::{
         Artist, ArtistAlbums, ArtistDetail, ArtistInfo, ArtistLink, ArtistStats, ArtistTracks,
     },
-    config::{AudioQuality, Authentication, Config, Preferences, PreferencesTab, Theme},
+    config::{
+        AudioQuality, Authentication, Config, CustomTheme, Preferences, PreferencesTab, Theme,
+    },
     ctx::Ctx,
     find::{FindQuery, Finder, MatchFindQuery},
     nav::{Nav, Route, SpotifyUrl},
