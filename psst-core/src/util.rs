@@ -152,3 +152,76 @@ where
     };
     Ok(msg)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::SeekFrom;
+    use crate::protocol::metadata::ActivityPeriod;
+    use std::io::{self, Seek};
+
+    struct FailingSeek;
+
+    impl io::Seek for FailingSeek {
+        fn seek(&mut self, _: SeekFrom) -> io::Result<u64> {
+            Err(io::Error::other("failing seek"))
+        }
+    }
+
+    #[derive(Default)]
+    struct UnderflowingSeek {
+        position: i64,
+    }
+
+    impl io::Seek for UnderflowingSeek {
+        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
+            match pos {
+                SeekFrom::Start(target) => {
+                    self.position = target as i64;
+                }
+                SeekFrom::Current(delta) => {
+                    let updated = (self.position as i128) + (delta as i128);
+                    self.position = updated.max(0) as i64;
+                }
+                SeekFrom::End(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Unsupported,
+                        "seek from end not supported",
+                    ));
+                }
+            }
+            Ok(self.position as u64)
+        }
+    }
+
+    #[test]
+    fn offset_file_new_propagates_seek_failure() {
+        let err = OffsetFile::new(FailingSeek, 4)
+            .err()
+            .expect("seek should fail");
+        assert_eq!(err.kind(), io::ErrorKind::Other);
+    }
+
+    #[test]
+    fn offset_file_seek_saturates_when_underflowing() {
+        let mut file = OffsetFile::new(UnderflowingSeek::default(), 10)
+            .expect("initial seek must succeed");
+
+        let forward = file
+            .seek(SeekFrom::Start(7))
+            .expect("expected seek relative to offset");
+        assert_eq!(forward, 7);
+
+        let underflow = file
+            .seek(SeekFrom::Current(-20))
+            .expect("expected saturating behavior");
+        assert_eq!(underflow, 0);
+    }
+
+    #[test]
+    fn deserialize_protobuf_rejects_garbage_bytes() {
+        let err = deserialize_protobuf::<ActivityPeriod>(&[0xFF])
+            .expect_err("invalid payload must error");
+        assert!(matches!(err, Error::IoError(_)));
+    }
+}
