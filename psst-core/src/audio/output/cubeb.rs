@@ -1,4 +1,4 @@
-use std::{env, ffi::CString, ops::Deref};
+use std::{env, ffi::CString};
 
 use crossbeam_channel::{bounded, Receiver, Sender};
 
@@ -182,7 +182,7 @@ impl AudioSink for CubebSink {
     }
 
     fn close(&self) {
-        self.stop();
+        let _ = self.stream_send.send(StreamMsg::Close);
     }
 }
 

@@ -7,8 +7,8 @@ use std::{
 use crate::{
     cmd,
     data::{
-        AppState, AudioQuality, Authentication, Config, Preferences, PreferencesTab, Promise,
-        SliderScrollScale, Theme,
+        AppState, AudioQuality, Authentication, Config, CustomTheme, Preferences, PreferencesTab,
+        Promise, SliderScrollScale, Theme,
     },
     widget::{icons, Async, Border, Checkbox, MyWidgetExt},
 };
@@ -16,10 +16,10 @@ use druid::{
     text::ParseFormatter,
     widget::{
         Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking, MainAxisAlignment,
-        RadioGroup, SizedBox, Slider, TextBox, ViewSwitcher,
+        Painter, RadioGroup, SizedBox, Slider, TextBox, ViewSwitcher,
     },
-    Color, Data, Env, Event, EventCtx, Insets, Lens, LensExt, LifeCycle, LifeCycleCtx, Selector,
-    Widget, WidgetExt,
+    Color, Data, Env, Event, EventCtx, Insets, Lens, LensExt, LifeCycle, LifeCycleCtx,
+    RenderContext, Selector, Widget, WidgetExt,
 };
 use psst_core::{connection::Credentials, lastfm, oauth, session::SessionConfig};
 
@@ -279,11 +279,19 @@ fn appearance_tab_widget() -> impl Widget<AppState> {
         .with_child(Label::new("Theme").with_font(theme::UI_FONT_MEDIUM))
         .with_spacer(theme::grid(2.0))
         .with_child(
-            RadioGroup::column(vec![("Light", Theme::Light), ("Dark", Theme::Dark)])
-                .lens(AppState::config.then(Config::theme)),
+            RadioGroup::column(vec![
+                ("Light", Theme::Light),
+                ("Dark", Theme::Dark),
+                ("Custom", Theme::Custom),
+            ])
+            .lens(AppState::config.then(Config::theme)),
         );
 
     col = col.with_spacer(theme::grid(3.0));
+
+    col = col
+        .with_child(custom_theme_section())
+        .with_spacer(theme::grid(3.0));
 
     col = col
         .with_child(Label::new("Artwork").with_font(theme::UI_FONT_MEDIUM))
@@ -299,6 +307,138 @@ fn appearance_tab_widget() -> impl Widget<AppState> {
         );
 
     col
+}
+
+fn custom_theme_section() -> impl Widget<AppState> {
+    ViewSwitcher::new(
+        |state: &AppState, _| state.config.theme,
+        |theme, _, _| match theme {
+            Theme::Custom => custom_theme_editor().boxed(),
+            _ => Label::new("Switch to the Custom theme to edit colors.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap)
+                .boxed(),
+        },
+    )
+    .padding((0.0, theme::grid(1.0), 0.0, 0.0))
+}
+
+fn custom_theme_editor() -> impl Widget<AppState> {
+    let mut col = Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(false);
+
+    col = col
+        .with_child(Label::new("Custom Colors").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Update the palette below to restyle the app instantly.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0));
+
+    col = col
+        .with_child(custom_color_row(
+            "Color 1",
+            "Background — main window backdrop",
+            "#1c1c1f",
+            druid::KeyOrValue::Key(theme::CUSTOM_COLOR_3),
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::background),
+        ))
+        .with_child(custom_color_row(
+            "Color 2",
+            "Surface — cards, sidebars and panels",
+            "#242429",
+            druid::KeyOrValue::Key(theme::CUSTOM_COLOR_2),
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::surface),
+        ))
+        .with_child(custom_color_row(
+            "Color 3",
+            "Primary text — titles and menu items",
+            "#f2f2f2",
+            druid::KeyOrValue::Key(theme::CUSTOM_COLOR_1),
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::primary_text),
+        ))
+        .with_child(custom_color_row(
+            "Color 4",
+            "Accent — buttons and selected chips",
+            "#1db954",
+            druid::KeyOrValue::Key(theme::CUSTOM_COLOR_4),
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::accent),
+        ))
+        .with_child(custom_color_row(
+            "Color 5",
+            "Highlight — progress bar and active tabs",
+            "#3a7bd5",
+            druid::KeyOrValue::Key(theme::CUSTOM_COLOR_5),
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::highlight),
+        ));
+
+    col
+}
+
+fn custom_color_row<L>(
+    title: &'static str,
+    description: &'static str,
+    placeholder: &'static str,
+    preview_color: druid::KeyOrValue<Color>,
+    lens: L,
+) -> impl Widget<AppState>
+where
+    L: Lens<AppState, String> + Clone + 'static,
+{
+    Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .with_child(Label::new(title).with_font(theme::UI_FONT_MEDIUM))
+        .with_child(
+            Label::new(description)
+                .with_text_size(theme::TEXT_SIZE_SMALL)
+                .with_text_color(theme::PLACEHOLDER_COLOR),
+        )
+        .with_spacer(theme::grid(0.5))
+        .with_child(
+            Flex::row()
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .with_child(
+                    TextBox::new()
+                        .with_placeholder(placeholder)
+                        .fix_width(theme::grid(18.0))
+                        .lens(lens.clone()),
+                )
+                .with_spacer(theme::grid(1.0))
+                .with_child({
+                    let preview_color = preview_color.clone();
+                    let lens_for_click = lens.clone();
+                    SizedBox::empty()
+                        .fix_size(theme::grid(3.0), theme::grid(3.0))
+                        .background(Painter::new(move |ctx, _, env| {
+                            let color = preview_color.resolve(env);
+                            let rect = ctx.size().to_rect();
+                            ctx.fill(rect, &color);
+                        }))
+                        .rounded(theme::BUTTON_BORDER_RADIUS)
+                        .border(theme::BORDER_LIGHT, 1.0)
+                        .on_left_click(move |ctx, _, data: &mut AppState, _| {
+                            let current = lens_for_click.with(data, |value| value.clone());
+                            if let Some(chosen) = choose_system_color(&current) {
+                                lens_for_click.with_mut(data, |value| *value = chosen);
+                                ctx.request_paint();
+                            }
+                        })
+                }),
+        )
+        .with_spacer(theme::grid(1.5))
 }
 
 struct CacheController {
@@ -322,6 +462,61 @@ impl CacheController {
         });
         self.thread.replace(handle);
     }
+}
+
+fn choose_system_color(current: &str) -> Option<String> {
+    let (default_r, default_g, default_b) = parse_hex_color(current).unwrap_or((0, 0, 0));
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+
+        let script = format!(
+            "choose color default color {{{}, {}, {}}}",
+            u16::from(default_r) * 257,
+            u16::from(default_g) * 257,
+            u16::from(default_b) * 257
+        );
+
+        let output = Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut parts = stdout
+            .trim()
+            .split(',')
+            .filter_map(|p| p.trim().parse::<u16>().ok());
+        let r = parts.next()?;
+        let g = parts.next()?;
+        let b = parts.next()?;
+
+        Some(format!("#{:02x}{:02x}{:02x}", r / 257, g / 257, b / 257))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (default_r, default_g, default_b);
+        None
+    }
+}
+
+fn parse_hex_color(input: &str) -> Option<(u8, u8, u8)> {
+    let trimmed = input.trim();
+    let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some((r, g, b))
 }
 
 impl<W: Widget<Preferences>> Controller<Preferences, W> for CacheController {
