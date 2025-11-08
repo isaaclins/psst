@@ -2,12 +2,21 @@ use druid::Data;
 
 use crate::error::Error;
 
-#[derive(Clone, Debug, Data)]
+#[derive(Clone, Debug, Data, Default)]
 pub enum Promise<T: Data, D: Data = (), E: Data = Error> {
+    #[default]
     Empty,
-    Deferred { def: D },
-    Resolved { def: D, val: T },
-    Rejected { def: D, err: E },
+    Deferred {
+        def: D,
+    },
+    Resolved {
+        def: D,
+        val: T,
+    },
+    Rejected {
+        def: D,
+        err: E,
+    },
 }
 
 #[derive(Eq, PartialEq, Debug)]
@@ -109,11 +118,5 @@ impl<T: Data, D: Data, E: Data> Promise<T, D, E> {
 impl<D: Data + Default, T: Data, E: Data> Promise<T, D, E> {
     pub fn defer_default(&mut self) {
         *self = Self::Deferred { def: D::default() };
-    }
-}
-
-impl<T: Data, D: Data, E: Data> Default for Promise<T, D, E> {
-    fn default() -> Self {
-        Self::Empty
     }
 }

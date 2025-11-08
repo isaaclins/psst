@@ -263,10 +263,11 @@ impl Config {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Data, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Data, Serialize, Deserialize, Default)]
 pub enum AudioQuality {
     Low,
     Normal,
+    #[default]
     High,
 }
 
@@ -277,12 +278,6 @@ impl AudioQuality {
             AudioQuality::Normal => 160,
             AudioQuality::High => 320,
         }
-    }
-}
-
-impl Default for AudioQuality {
-    fn default() -> Self {
-        Self::High
     }
 }
 
@@ -307,17 +302,12 @@ impl Default for CustomTheme {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Data, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Data, Serialize, Deserialize, Default)]
 pub enum Theme {
     Light,
     Dark,
+    #[default]
     Custom,
-}
-
-impl Default for Theme {
-    fn default() -> Self {
-        Self::Light
-    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Data, Serialize, Deserialize)]
