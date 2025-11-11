@@ -497,7 +497,7 @@ fn sidebar_menu_widget() -> impl Widget<AppState> {
     Flex::column()
         .with_default_spacer()
         .with_child(sidebar_link_widget("Home", Nav::Home))
-        .with_child(sidebar_link_widget("Tracks", Nav::SavedTracks))
+    .with_child(sidebar_link_widget("Favourites", Nav::SavedTracks))
         .with_child(sidebar_link_widget("Albums", Nav::SavedAlbums))
         .with_child(sidebar_link_widget("Podcasts", Nav::Shows))
         .with_child(search::input_widget().padding((theme::grid(1.0), theme::grid(1.0))))

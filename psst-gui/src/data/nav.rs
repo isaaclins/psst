@@ -61,7 +61,7 @@ impl Nav {
         match self {
             Nav::Home => "Home".to_string(),
             Nav::Lyrics => "Lyrics".to_string(),
-            Nav::SavedTracks => "Saved Tracks".to_string(),
+            Nav::SavedTracks => "Your Favourites".to_string(),
             Nav::SavedAlbums => "Saved Albums".to_string(),
             Nav::Shows => "Podcasts".to_string(),
             Nav::SearchResults(query) => query.to_string(),
@@ -77,7 +77,7 @@ impl Nav {
         match self {
             Nav::Home => "Home".to_string(),
             Nav::Lyrics => "Lyrics".to_string(),
-            Nav::SavedTracks => "Saved Tracks".to_string(),
+            Nav::SavedTracks => "Your Favourites".to_string(),
             Nav::SavedAlbums => "Saved Albums".to_string(),
             Nav::Shows => "Saved Shows".to_string(),
             Nav::SearchResults(query) => format!("Search \"{query}\""),
