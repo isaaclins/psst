@@ -95,6 +95,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                     PreferencesTab::Account => {
                         account_tab_widget(AccountTab::InPreferences).boxed()
                     }
+                    PreferencesTab::Privacy => privacy_tab_widget().boxed(),
                     PreferencesTab::Cache => cache_tab_widget().boxed(),
                     PreferencesTab::About => about_tab_widget().boxed(),
                 },
@@ -155,6 +156,12 @@ fn tabs_widget() -> impl Widget<AppState> {
             "Account",
             &icons::ACCOUNT,
             PreferencesTab::Account,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Privacy",
+            &icons::PREFERENCES,
+            PreferencesTab::Privacy,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -1026,6 +1033,61 @@ impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
         }
         child.lifecycle(ctx, event, data, env);
     }
+}
+
+fn privacy_tab_widget() -> impl Widget<AppState> {
+    let mut col = Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true);
+
+    // Discord Rich Presence section
+    col = col
+        .with_child(Label::new("Social Presence").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Label::new("Control what information is shared when you're listening to music.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0));
+
+    col = col
+        .with_child(
+            Checkbox::new("Enable Discord Rich Presence")
+                .lens(AppState::config.then(Config::enable_discord_presence)),
+        )
+        .with_spacer(theme::grid(1.0));
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    // Privacy controls section
+    col = col
+        .with_child(Label::new("Presence Information").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Label::new("Choose what information to display in Discord Rich Presence and macOS Now Playing.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0));
+
+    col = col
+        .with_child(
+            Checkbox::new("Show artist name")
+                .lens(AppState::config.then(Config::presence_show_artist)),
+        )
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Checkbox::new("Show album name")
+                .lens(AppState::config.then(Config::presence_show_album)),
+        )
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Checkbox::new("Show track duration")
+                .lens(AppState::config.then(Config::presence_show_track_duration)),
+        );
+
+    col
 }
 
 fn cache_tab_widget() -> impl Widget<AppState> {
