@@ -135,7 +135,13 @@ impl Queue {
             QueueBehavior::Sequential | QueueBehavior::Random | QueueBehavior::LoopTrack => {
                 self.position + 1
             }
-            QueueBehavior::LoopAll => (self.position + 1) % self.items.len(),
+            QueueBehavior::LoopAll => {
+                if self.items.is_empty() {
+                    0
+                } else {
+                    (self.position + 1) % self.items.len()
+                }
+            }
         }
     }
 
@@ -143,7 +149,13 @@ impl Queue {
         match self.behavior {
             QueueBehavior::Sequential | QueueBehavior::Random => self.position + 1,
             QueueBehavior::LoopTrack => self.position,
-            QueueBehavior::LoopAll => (self.position + 1) % self.items.len(),
+            QueueBehavior::LoopAll => {
+                if self.items.is_empty() {
+                    0
+                } else {
+                    (self.position + 1) % self.items.len()
+                }
+            }
         }
     }
 }

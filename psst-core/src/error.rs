@@ -86,3 +86,44 @@ impl From<RecvTimeoutError> for Error {
         Error::RecvTimeoutError(err)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossbeam_channel::unbounded;
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+
+    #[test]
+    fn display_includes_unknown_auth_code() {
+        let err = Error::AuthFailed { code: 42 };
+        assert!(err.to_string().contains("42"));
+    }
+
+    #[test]
+    fn send_error_conversion_uses_send_error_variant() {
+        let (tx, rx) = unbounded::<()>();
+        drop(rx);
+
+        let send_error = tx.send(()).expect_err("channel send must fail");
+        let converted: Error = send_error.into();
+        assert!(matches!(converted, Error::SendError));
+    }
+
+    #[test]
+    fn recv_timeout_conversion_preserves_timeout_variant() {
+        let (_tx, rx) = channel::<()>();
+        let timeout = rx
+            .recv_timeout(Duration::from_millis(5))
+            .expect_err("expected timeout");
+
+        let converted: Error = timeout.into();
+        match converted {
+            Error::RecvTimeoutError(inner) => match inner {
+                RecvTimeoutError::Timeout => {}
+                _ => panic!("unexpected RecvTimeoutError variant"),
+            },
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+}
