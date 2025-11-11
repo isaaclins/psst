@@ -1056,7 +1056,28 @@ fn privacy_tab_widget() -> impl Widget<AppState> {
             Checkbox::new("Enable Discord Rich Presence")
                 .lens(AppState::config.then(Config::enable_discord_presence)),
         )
-        .with_spacer(theme::grid(1.0));
+        .with_spacer(theme::grid(2.0));
+
+    // Discord App ID input
+    col = col
+        .with_child(
+            Label::new("Discord Application ID:")
+                .with_text_size(theme::TEXT_SIZE_SMALL),
+        )
+        .with_spacer(theme::grid(0.5))
+        .with_child(
+            TextBox::new()
+                .with_placeholder("Enter your Discord Application ID")
+                .lens(AppState::config.then(Config::discord_app_id))
+                .fix_width(theme::grid(30.0)),
+        )
+        .with_spacer(theme::grid(0.5))
+        .with_child(
+            Label::new("Register an application at discord.com/developers to get an Application ID")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_text_size(theme::TEXT_SIZE_SMALL)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        );
 
     col = col.with_spacer(theme::grid(3.0));
 

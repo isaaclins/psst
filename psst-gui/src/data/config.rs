@@ -143,6 +143,8 @@ pub struct Config {
     #[serde(default)]
     pub enable_discord_presence: bool,
     #[serde(default)]
+    pub discord_app_id: String,
+    #[serde(default)]
     pub presence_show_artist: bool,
     #[serde(default)]
     pub presence_show_album: bool,
@@ -176,6 +178,7 @@ impl Default for Config {
             lastfm_enable: false,
             sidebar_visible: true,
             enable_discord_presence: false,
+            discord_app_id: String::new(),
             presence_show_artist: true,
             presence_show_album: true,
             presence_show_track_duration: true,

@@ -74,17 +74,19 @@ fn init_scrobbler_instance(data: &AppState) -> Option<Scrobbler> {
     None
 }
 
-// Discord application ID for Psst
-// This is a placeholder - in a real implementation, you would register your app at https://discord.com/developers
-const DISCORD_APP_ID: &str = "1234567890123456789";
-
 fn init_discord_client(config: &Config) -> Option<DiscordIpcClient> {
     if !config.enable_discord_presence {
         log::info!("Discord Rich Presence is disabled");
         return None;
     }
 
-    match DiscordIpcClient::new(DISCORD_APP_ID) {
+    let app_id = config.discord_app_id.trim();
+    if app_id.is_empty() {
+        log::warn!("Discord Rich Presence enabled but no Application ID configured");
+        return None;
+    }
+
+    match DiscordIpcClient::new(app_id) {
         Ok(mut client) => {
             match client.connect() {
                 Ok(()) => {
@@ -793,7 +795,8 @@ where
         }
 
         // Reinitialize Discord client if presence settings changed
-        let discord_changed = old_data.config.enable_discord_presence != data.config.enable_discord_presence;
+        let discord_changed = old_data.config.enable_discord_presence != data.config.enable_discord_presence
+            || old_data.config.discord_app_id != data.config.discord_app_id;
 
         if discord_changed {
             // Disconnect existing client if any
