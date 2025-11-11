@@ -1,4 +1,4 @@
-use crate::data::Track;
+use crate::data::{AlbumLink, PlaylistLink, Track};
 use druid::{Selector, WidgetId};
 use psst_core::{item_id::ItemId, player::item::PlaybackItem};
 use std::sync::Arc;
@@ -50,6 +50,8 @@ pub const PLAYBACK_STOPPED: Selector = Selector::new("app.playback-stopped");
 // Playback control
 pub const PLAY: Selector<usize> = Selector::new("app.play-index");
 pub const PLAY_TRACKS: Selector<PlaybackPayload> = Selector::new("app.play-tracks");
+pub const PLAY_PLAYLIST: Selector<PlaylistLink> = Selector::new("app.play-playlist");
+pub const PLAY_ALBUM: Selector<AlbumLink> = Selector::new("app.play-album");
 pub const PLAY_PREVIOUS: Selector = Selector::new("app.play-previous");
 pub const PLAY_PAUSE: Selector = Selector::new("app.play-pause");
 pub const PLAY_RESUME: Selector = Selector::new("app.play-resume");

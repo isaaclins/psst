@@ -7,8 +7,8 @@ use crate::{
         AfterDelay, AlertCleanupController, NavController, SessionController, SortController,
     },
     data::{
-        config::SortOrder, Alert, AlertStyle, AppState, Config, Nav, Playable, Playback, Route,
-        ALERT_DURATION,
+        config::SortOrder, AlbumLink, Alert, AlertStyle, AppState, Config, Nav, Playable, Playback,
+        PlaybackOrigin, PlaybackPayload, PlaylistLink, Route, ALERT_DURATION,
     },
     webapi::WebApi,
     widget::{
@@ -237,6 +237,65 @@ fn root_widget() -> impl Widget<AppState> {
                     log::error!("Failed to fetch credits for {}: {:?}", _track.name, err);
                     data.error_alert(format!("Failed to fetch track credits: {err}"));
                 }
+            },
+        )
+        .on_command_async(
+            cmd::PLAY_PLAYLIST,
+            |link: PlaylistLink| WebApi::global().get_playlist_tracks(&link.id),
+            |_, _, _| {},
+            |ctx, data, (link, result): (PlaylistLink, Result<Vector<Arc<Track>>, Error>)| {
+                match result {
+                    Ok(tracks) => {
+                        if tracks.is_empty() {
+                            data.info_alert("Playlist is empty");
+                        } else {
+                            let mut items = Vector::new();
+                            for track in tracks {
+                                items.push_back(Playable::Track(track));
+                            }
+                            let payload = PlaybackPayload {
+                                origin: PlaybackOrigin::Playlist(link.clone()),
+                                items,
+                                position: 0,
+                            };
+                            ctx.submit_command(cmd::PLAY_TRACKS.with(payload));
+                        }
+                    }
+                    Err(err) => {
+                        data.error_alert(format!("Failed to start playlist playback: {err}"));
+                    }
+                }
+                ctx.set_handled();
+            },
+        )
+        .on_command_async(
+            cmd::PLAY_ALBUM,
+            |link: AlbumLink| WebApi::global().get_album(&link.id),
+            |_, _, _| {},
+            |ctx, data, (link, result)| {
+                match result {
+                    Ok(album) => {
+                        let tracks = album.data.into_tracks_with_context();
+                        if tracks.is_empty() {
+                            data.info_alert("Album is empty");
+                        } else {
+                            let mut items = Vector::new();
+                            for track in tracks {
+                                items.push_back(Playable::Track(track));
+                            }
+                            let payload = PlaybackPayload {
+                                origin: PlaybackOrigin::Album(link.clone()),
+                                items,
+                                position: 0,
+                            };
+                            ctx.submit_command(cmd::PLAY_TRACKS.with(payload));
+                        }
+                    }
+                    Err(err) => {
+                        data.error_alert(format!("Failed to start album playback: {err}"));
+                    }
+                }
+                ctx.set_handled();
             },
         )
     // .debug_invalidation()

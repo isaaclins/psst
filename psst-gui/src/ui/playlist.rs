@@ -51,7 +51,13 @@ pub fn list_widget() -> impl Widget<AppState> {
         || {
             List::new(|| {
                 let cover_size = theme::grid(3.0);
-                let cover = rounded_cover_widget(cover_size).lens(Ctx::data()).boxed();
+                let cover = rounded_cover_widget(cover_size)
+                    .on_left_double_click(|ctx, _event, playlist: &mut Playlist, _| {
+                        ctx.submit_command(cmd::PLAY_PLAYLIST.with(playlist.link()));
+                        ctx.set_handled();
+                    })
+                    .lens(Ctx::data())
+                    .boxed();
                 let cover_with_spacing = Flex::row()
                     .with_child(cover)
                     .with_spacer(theme::grid(1.0))
@@ -74,10 +80,14 @@ pub fn list_widget() -> impl Widget<AppState> {
                     .expand_width()
                     .padding(Insets::uniform_xy(theme::grid(2.0), theme::grid(0.6)))
                     .link()
-                    .on_left_click(|ctx, _, playlist, _| {
+                    .on_left_click(|ctx, _event, playlist, _| {
                         ctx.submit_command(
                             cmd::NAVIGATE.with(Nav::PlaylistDetail(playlist.data.link())),
                         );
+                    })
+                    .on_left_double_click(|ctx, _event, playlist, _| {
+                        ctx.submit_command(cmd::PLAY_PLAYLIST.with(playlist.data.link()));
+                        ctx.set_handled();
                     })
                     .context_menu(playlist_menu_ctx)
             })
@@ -338,7 +348,11 @@ pub fn playlist_widget(horizontal: bool) -> impl Widget<WithCtx<Playlist>> {
     } else {
         theme::grid(6.0)
     };
-    let playlist_image = rounded_cover_widget(playlist_image_size).lens(Ctx::data());
+    let playlist_image = rounded_cover_widget(playlist_image_size)
+        .on_left_click(|ctx, _event, playlist: &mut Playlist, _| {
+            ctx.submit_command(cmd::PLAY_PLAYLIST.with(playlist.link()));
+        })
+        .lens(Ctx::data());
 
     let playlist_name = Label::raw()
         .with_font(theme::UI_FONT_MEDIUM)
@@ -452,6 +466,9 @@ fn playlist_info_widget() -> impl Widget<WithCtx<Playlist>> {
 
     let size = theme::grid(10.0);
     let playlist_cover = cover_widget(size)
+        .on_left_click(|ctx, _event, playlist: &mut Playlist, _| {
+            ctx.submit_command(cmd::PLAY_PLAYLIST.with(playlist.link()));
+        })
         .lens(Ctx::data())
         .clip(Size::new(size, size).to_rounded_rect(4.0))
         .context_menu(playlist_menu_ctx);
