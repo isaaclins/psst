@@ -231,7 +231,7 @@ impl AppDelegate<AppState> for Delegate {
             Handled::Yes
         } else if let Some(file_info) = cmd.get(commands::SAVE_FILE_AS) {
             // Handle theme export
-            if let Err(e) = data.config.custom_theme.export_to_file(&file_info.path()) {
+            if let Err(e) = data.config.custom_theme.export_to_file(file_info.path()) {
                 data.error_alert(format!("Failed to export theme: {}", e));
             } else {
                 data.info_alert("Theme exported successfully");
@@ -239,7 +239,7 @@ impl AppDelegate<AppState> for Delegate {
             Handled::Yes
         } else if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
             // Handle theme import
-            match crate::data::CustomTheme::import_from_file(&file_info.path()) {
+            match crate::data::CustomTheme::import_from_file(file_info.path()) {
                 Ok(theme) => {
                     data.config.custom_theme = theme;
                     data.config.theme = crate::data::Theme::Custom;

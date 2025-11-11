@@ -424,3 +424,87 @@ fn get_dir_size(path: &Path) -> Option<u64> {
         Some(acc + size)
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_custom_theme_serialization() {
+        let theme = CustomTheme::default();
+        let json = theme.to_json().unwrap();
+        let parsed = CustomTheme::from_json(&json).unwrap();
+        assert_eq!(theme, parsed);
+    }
+
+    #[test]
+    fn test_custom_theme_validation_valid() {
+        let theme = CustomTheme {
+            background: "#1c1c1f".into(),
+            surface: "#242429".into(),
+            primary_text: "#f2f2f2".into(),
+            accent: "#1db954".into(),
+            highlight: "#3a7bd5".into(),
+            font_family: "System UI".into(),
+            font_size: "13.0".into(),
+        };
+        assert!(theme.validate().is_ok());
+    }
+
+    #[test]
+    fn test_custom_theme_validation_invalid_color() {
+        let json = r##"{
+            "background": "invalid",
+            "surface": "#242429",
+            "primary_text": "#f2f2f2",
+            "accent": "#1db954",
+            "highlight": "#3a7bd5",
+            "font_family": "System UI",
+            "font_size": "13.0"
+        }"##;
+        assert!(CustomTheme::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_custom_theme_validation_invalid_font_size() {
+        let json = r##"{
+            "background": "#1c1c1f",
+            "surface": "#242429",
+            "primary_text": "#f2f2f2",
+            "accent": "#1db954",
+            "highlight": "#3a7bd5",
+            "font_family": "System UI",
+            "font_size": "invalid"
+        }"##;
+        assert!(CustomTheme::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_custom_theme_validation_font_size_out_of_range() {
+        let json = r##"{
+            "background": "#1c1c1f",
+            "surface": "#242429",
+            "primary_text": "#f2f2f2",
+            "accent": "#1db954",
+            "highlight": "#3a7bd5",
+            "font_family": "System UI",
+            "font_size": "50.0"
+        }"##;
+        assert!(CustomTheme::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_custom_theme_backwards_compatibility() {
+        // Test that old themes without font fields can still be loaded
+        let json = r##"{
+            "background": "#1c1c1f",
+            "surface": "#242429",
+            "primary_text": "#f2f2f2",
+            "accent": "#1db954",
+            "highlight": "#3a7bd5"
+        }"##;
+        let theme = CustomTheme::from_json(json).unwrap();
+        assert_eq!(theme.font_family, "System UI");
+        assert_eq!(theme.font_size, "13.0");
+    }
+}
