@@ -210,58 +210,13 @@ pub fn artwork_widget() -> impl Widget<AppState> {
 }
 
 fn root_widget() -> impl Widget<AppState> {
-    let playlists = Scroll::new(playlist::list_widget())
-        .vertical()
-        .expand_height();
+    let content = Either::new(
+        |state: &AppState, _| state.config.sidebar_visible,
+        layout_with_sidebar(),
+        main_panel_only_widget(),
+    );
 
-    let playlists = Flex::column()
-        .must_fill_main_axis(true)
-        .with_child(sidebar_menu_widget())
-        .with_default_spacer()
-        .with_flex_child(playlists, 1.0)
-        .padding(if cfg!(target_os = "macos") {
-            // Accommodate the window controls on Mac.
-            Insets::new(0.0, 24.0, 0.0, 0.0)
-        } else {
-            Insets::ZERO
-        });
-
-    let controls = Flex::column()
-        .with_default_spacer()
-        .with_child(volume_slider())
-        .with_default_spacer()
-        .with_child(user::user_widget())
-        .center()
-        .fix_height(88.0)
-        .background(Border::Top.with_color(theme::GREY_500));
-
-    let sidebar = Flex::column()
-        .with_flex_child(playlists, 1.0)
-        .with_child(controls)
-        .background(theme::BACKGROUND_DARK);
-
-    let topbar = Flex::row()
-        .must_fill_main_axis(true)
-        .with_child(topbar_back_button_widget())
-        .with_child(topbar_title_widget())
-        .with_child(topbar_sort_widget())
-        .background(Border::Bottom.with_color(theme::BACKGROUND_DARK));
-
-    let main = Flex::column()
-        .cross_axis_alignment(CrossAxisAlignment::Start)
-        .with_child(topbar)
-        .with_flex_child(Overlay::bottom(route_widget(), alert_widget()), 1.0)
-        .with_child(playback::panel_widget())
-        .background(theme::BACKGROUND_LIGHT);
-
-    let split = Split::columns(sidebar, main)
-        .split_point(0.2)
-        .bar_size(1.0)
-        .min_size(150.0, 300.0)
-        .min_bar_area(1.0)
-        .solid_bar(true);
-
-    ThemeScope::new(split)
+    ThemeScope::new(content)
         .controller(SessionController)
         .controller(NavController)
         .controller(SortController)
@@ -287,6 +242,75 @@ fn root_widget() -> impl Widget<AppState> {
     // .debug_invalidation()
     // .debug_widget_id()
     // .debug_paint_layout()
+}
+
+fn layout_with_sidebar() -> impl Widget<AppState> {
+    Split::columns(sidebar_widget(), main_panel_widget())
+        .split_point(0.2)
+        .bar_size(1.0)
+        .min_size(150.0, 300.0)
+        .min_bar_area(1.0)
+        .solid_bar(true)
+}
+
+fn main_panel_widget() -> impl Widget<AppState> {
+    Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .with_child(topbar_widget())
+        .with_flex_child(Overlay::bottom(route_widget(), alert_widget()), 1.0)
+        .with_child(playback::panel_widget())
+        .background(theme::BACKGROUND_LIGHT)
+}
+
+#[cfg(target_os = "macos")]
+fn main_panel_only_widget() -> impl Widget<AppState> {
+    main_panel_widget().padding((0.0, theme::grid(3.0), 0.0, 0.0))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn main_panel_only_widget() -> impl Widget<AppState> {
+    main_panel_widget()
+}
+
+fn topbar_widget() -> impl Widget<AppState> {
+    Flex::row()
+        .must_fill_main_axis(true)
+        .with_child(topbar_back_button_widget())
+        .with_child(topbar_title_widget())
+        .with_child(topbar_sort_widget())
+        .background(Border::Bottom.with_color(theme::BACKGROUND_DARK))
+}
+
+fn sidebar_widget() -> impl Widget<AppState> {
+    let playlists = Scroll::new(playlist::list_widget())
+        .vertical()
+        .expand_height();
+
+    let playlists = Flex::column()
+        .must_fill_main_axis(true)
+        .with_child(sidebar_menu_widget())
+        .with_default_spacer()
+        .with_flex_child(playlists, 1.0)
+        .padding(if cfg!(target_os = "macos") {
+            // Accommodate the window controls on Mac.
+            Insets::new(0.0, 24.0, 0.0, 0.0)
+        } else {
+            Insets::ZERO
+        });
+
+    let controls = Flex::column()
+        .with_default_spacer()
+        .with_child(volume_slider())
+        .with_default_spacer()
+        .with_child(user::user_widget())
+        .center()
+        .fix_height(88.0)
+        .background(Border::Top.with_color(theme::GREY_500));
+
+    Flex::column()
+        .with_flex_child(playlists, 1.0)
+        .with_child(controls)
+        .background(theme::BACKGROUND_DARK)
 }
 
 fn alert_widget() -> impl Widget<AppState> {
@@ -513,25 +537,28 @@ fn topbar_sort_widget() -> impl Widget<AppState> {
 
 fn topbar_back_button_widget() -> impl Widget<AppState> {
     let icon = icons::BACK.scale((10.0, theme::grid(2.0)));
-    let disabled = icon
-        .clone()
-        .with_color(theme::GREY_600)
-        .padding(theme::grid(1.0));
-    let enabled = icon
-        .padding(theme::grid(1.0))
-        .link()
-        .rounded(theme::BUTTON_BORDER_RADIUS)
-        .on_left_click(|ctx, _, _, _| {
-            ctx.submit_command(cmd::NAVIGATE_BACK.with(1));
-        })
-        .context_menu(history_menu);
+
+    let make_button = |icon: icons::Icon| {
+        icon.padding(theme::grid(1.0))
+            .link()
+            .rounded(theme::BUTTON_BORDER_RADIUS)
+            .on_left_click(|ctx, _, data: &mut AppState, _| {
+                data.config.sidebar_visible = !data.config.sidebar_visible;
+                data.config.save();
+                ctx.request_layout();
+            })
+            .context_menu(|data: &AppState| history_menu(&data.history))
+    };
+
+    let visible = make_button(icon.clone().with_color(theme::GREY_300));
+    let hidden = make_button(icon.with_color(theme::GREY_200));
+
     Either::new(
-        |history: &Vector<Nav>, _| history.is_empty(),
-        disabled,
-        enabled,
+        |data: &AppState, _| data.config.sidebar_visible,
+        visible,
+        hidden,
     )
     .padding(theme::grid(1.0))
-    .lens(AppState::history)
 }
 
 fn history_menu(history: &Vector<Nav>) -> Menu<AppState> {
