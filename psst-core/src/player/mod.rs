@@ -164,7 +164,10 @@ impl Player {
             } if item == requested_item => match result {
                 Ok(loaded_item) => {
                     log::info!("preloaded audio file");
-                    self.preload = PreloadState::Preloaded { item, loaded_item };
+                    self.preload = PreloadState::Preloaded { 
+                        item, 
+                        loaded_item: Box::new(loaded_item)
+                    };
                 }
                 Err(err) => {
                     log::error!("failed to preload audio file, error while opening: {err}");
@@ -230,7 +233,7 @@ impl Player {
                 loaded_item,
             } if preloaded_item == item => {
                 // This item is already loaded in the preloader state.
-                self.play_loaded(loaded_item);
+                self.play_loaded(*loaded_item);
                 return;
             }
 
@@ -517,7 +520,7 @@ enum PreloadState {
     },
     Preloaded {
         item: PlaybackItem,
-        loaded_item: LoadedPlaybackItem,
+        loaded_item: Box<LoadedPlaybackItem>,
     },
     None,
 }

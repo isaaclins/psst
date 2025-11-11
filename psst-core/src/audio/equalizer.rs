@@ -420,8 +420,10 @@ mod tests {
 
     #[test]
     fn test_equalizer_process_when_enabled() {
-        let mut config = EqualizerConfig::default();
-        config.enabled = true;
+        let mut config = EqualizerConfig {
+            enabled: true,
+            ..Default::default()
+        };
         config.bands[0].gain_db = 6.0; // Boost bass
         
         let mut eq = Equalizer::new(config, 44100);
@@ -438,13 +440,15 @@ mod tests {
         let config = EqualizerConfig::default();
         let mut eq = Equalizer::new(config, 44100);
         
-        let mut new_config = EqualizerConfig::default();
-        new_config.enabled = true;
+        let mut new_config = EqualizerConfig {
+            enabled: true,
+            ..Default::default()
+        };
         new_config.bands[0].gain_db = 10.0;
         
         eq.update_config(new_config.clone());
         
-        assert_eq!(eq.config().enabled, true);
+        assert!(eq.config().enabled);
         assert_eq!(eq.config().bands[0].gain_db, 10.0);
     }
 }
