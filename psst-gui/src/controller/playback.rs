@@ -725,17 +725,18 @@ where
         env: &Env,
     ) {
         // Process any OS media-control events routed through the controller.
-        if let Some(rx) = &self.media_control_rx {
+        if let Some(rx_inner) = self.media_control_rx.take() {
+            let mut rx = rx_inner;
             loop {
                 match rx.try_recv() {
                     Ok(event) => {
                         // Throttle Next/Previous coming from OS media controls as well.
-                        let should_throttle = matches!(
+                        let is_skip = matches!(
                             &event,
                             PlayerEvent::Command(cmd) if matches!(cmd, PlayerCommand::Next | PlayerCommand::Previous)
-                        ) && self.should_throttle_skip();
+                        );
 
-                        if should_throttle {
+                        if is_skip && self.should_throttle_skip() {
                             log::debug!("media control next/previous skipped due to debounce");
                         } else {
                             self.send(event);
@@ -748,6 +749,7 @@ where
                     }
                 }
             }
+            self.media_control_rx = Some(rx);
         }
         if !old_data.playback.volume.same(&data.playback.volume) {
             self.set_volume(data.playback.volume);
