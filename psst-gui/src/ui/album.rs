@@ -8,8 +8,8 @@ use druid::{
 use crate::{
     cmd,
     data::{
-        Album, AlbumDetail, AlbumLink, AppState, ArtistLink, Cached, Ctx, Library, Nav, Playable,
-        PlaybackOrigin, WithCtx,
+        Album, AlbumDetail, AlbumLink, AppState, ArtistLink, Cached, CommonCtx, Ctx, Library, Nav,
+        Playable, PlaybackOrigin, WithCtx,
     },
     ui::playable::PlayableIter,
     webapi::WebApi,
@@ -176,11 +176,17 @@ pub fn album_widget(horizontal: bool) -> impl Widget<WithCtx<Arc<Album>>> {
 
     album_layout
         .padding(theme::grid(1.0))
-        .lens(Ctx::data())
+        .lens(Ctx::<Arc<CommonCtx>, Arc<Album>>::data())
         .link()
         .rounded(theme::BUTTON_BORDER_RADIUS)
-        .on_left_click(|ctx, _, album, _| {
+        .on_left_click(|ctx, _event, album, _| {
             ctx.submit_command(cmd::NAVIGATE.with(Nav::AlbumDetail(album.data.link(), None)));
+        })
+        .on_left_double_click(|ctx, _event, album, _| {
+            if matches!(album.ctx.nav, Nav::SavedAlbums) {
+                ctx.submit_command(cmd::PLAY_ALBUM.with(album.data.link()));
+                ctx.set_handled();
+            }
         })
         .context_menu(album_ctx_menu)
 }

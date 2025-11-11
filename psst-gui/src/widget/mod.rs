@@ -31,7 +31,9 @@ pub use theme::ThemeScope;
 pub use utils::{Border, Clip, FadeOut, Logger};
 
 use crate::{
-    controller::{ExClick, ExCursor, ExScroll, OnCommand, OnCommandAsync, OnDebounce, OnUpdate},
+    controller::{
+        DoubleClick, ExClick, ExCursor, ExScroll, OnCommand, OnCommandAsync, OnDebounce, OnUpdate,
+    },
     data::{AppState, SliderScrollScale},
 };
 
@@ -82,6 +84,13 @@ pub trait MyWidgetExt<T: Data>: Widget<T> + Sized + 'static {
     ) -> ControllerHost<ControllerHost<Self, ExCursor<T>>, ExClick<T>> {
         self.with_cursor(Cursor::Pointer)
             .on_mouse_click(MouseButton::Left, func)
+    }
+
+    fn on_left_double_click(
+        self,
+        func: impl Fn(&mut EventCtx, &MouseEvent, &mut T, &Env) + 'static,
+    ) -> ControllerHost<Self, DoubleClick<T>> {
+        ControllerHost::new(self, DoubleClick::new(Some(MouseButton::Left), func))
     }
 
     fn on_right_click(

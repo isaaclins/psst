@@ -106,6 +106,10 @@ const APP_NAME: &str = "Psst";
 const CONFIG_FILENAME: &str = "config.json";
 const PROXY_ENV_VAR: &str = "SOCKS_PROXY";
 
+fn default_sidebar_visible() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Data, Lens, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -133,6 +137,8 @@ pub struct Config {
     pub lastfm_api_key: Option<String>,
     pub lastfm_api_secret: Option<String>,
     pub lastfm_enable: bool,
+    #[serde(default = "default_sidebar_visible")]
+    pub sidebar_visible: bool,
 }
 
 impl Default for Config {
@@ -159,6 +165,7 @@ impl Default for Config {
             lastfm_api_key: None,
             lastfm_api_secret: None,
             lastfm_enable: false,
+            sidebar_visible: true,
         }
     }
 }
