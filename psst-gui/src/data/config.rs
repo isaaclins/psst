@@ -329,7 +329,9 @@ impl CustomTheme {
     }
 
     pub fn from_json(json: &str) -> Result<Self, String> {
-        serde_json::from_str(json).map_err(|e| e.to_string())
+        let theme: Self = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        theme.validate()?;
+        Ok(theme)
     }
 
     pub fn export_to_file(&self, path: &Path) -> Result<(), String> {
@@ -340,6 +342,49 @@ impl CustomTheme {
     pub fn import_from_file(path: &Path) -> Result<Self, String> {
         let json = fs::read_to_string(path).map_err(|e| e.to_string())?;
         Self::from_json(&json)
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        // Validate colors are valid hex codes
+        Self::validate_hex_color(&self.background, "background")?;
+        Self::validate_hex_color(&self.surface, "surface")?;
+        Self::validate_hex_color(&self.primary_text, "primary_text")?;
+        Self::validate_hex_color(&self.accent, "accent")?;
+        Self::validate_hex_color(&self.highlight, "highlight")?;
+
+        // Validate font size is a valid number
+        if self.font_size.parse::<f64>().is_err() {
+            return Err(format!("Invalid font size: {}", self.font_size));
+        }
+
+        // Validate font size is reasonable (between 8 and 32)
+        let size = self.font_size.parse::<f64>().unwrap();
+        if !(8.0..=32.0).contains(&size) {
+            return Err(format!("Font size must be between 8 and 32, got {}", size));
+        }
+
+        Ok(())
+    }
+
+    fn validate_hex_color(color: &str, field_name: &str) -> Result<(), String> {
+        let trimmed = color.trim();
+        let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
+        
+        if hex.len() != 6 {
+            return Err(format!(
+                "Invalid color for {}: '{}' (expected #RRGGBB format)",
+                field_name, color
+            ));
+        }
+
+        if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(format!(
+                "Invalid hex color for {}: '{}' (must contain only 0-9, A-F)",
+                field_name, color
+            ));
+        }
+
+        Ok(())
     }
 }
 

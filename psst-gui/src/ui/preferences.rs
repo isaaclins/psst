@@ -448,9 +448,20 @@ fn typography_row<L>(
 where
     L: Lens<AppState, String> + 'static,
 {
+    let description = match label_text {
+        "Font Family" => "Use 'System UI', 'Serif', 'Sans-Serif', 'Monospace', or any installed font name",
+        "Font Size" => "Recommended: 10.0 - 18.0",
+        _ => "",
+    };
+
     Flex::column()
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .with_child(Label::new(label_text).with_font(theme::UI_FONT_MEDIUM))
+        .with_child(
+            Label::new(description)
+                .with_text_size(theme::TEXT_SIZE_SMALL)
+                .with_text_color(theme::PLACEHOLDER_COLOR),
+        )
         .with_spacer(theme::grid(0.5))
         .with_child(
             TextBox::new()
