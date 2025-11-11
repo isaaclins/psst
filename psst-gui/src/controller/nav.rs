@@ -99,13 +99,13 @@ where
                 self.load_route_data(ctx, data);
             }
             Event::Command(cmd) if cmd.is(cmd::TOGGLE_LYRICS) => {
-                match data.nav {
-                    Nav::Lyrics => data.navigate_back(),
-                    _ => {
-                        data.navigate(&Nav::Lyrics);
-                        if let Some(np) = data.playback.now_playing.as_ref() {
-                            ctx.submit_command(lyrics::SHOW_LYRICS.with(np.clone()));
-                        }
+                // Toggle the right-hand lyrics panel instead of navigating to a dedicated Lyrics route.
+                if data.lyrics_visible {
+                    data.lyrics_visible = false;
+                } else {
+                    data.lyrics_visible = true;
+                    if let Some(np) = data.playback.now_playing.as_ref() {
+                        ctx.submit_command(lyrics::SHOW_LYRICS.with(np.clone()));
                     }
                 }
                 ctx.set_handled();

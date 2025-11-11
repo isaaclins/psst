@@ -89,6 +89,7 @@ pub struct AppState {
     pub finder: Finder,
     pub added_queue: Vector<QueueEntry>,
     pub lyrics: Promise<Vector<TrackLines>>,
+    pub lyrics_visible: bool,
     pub credits: Option<TrackCredits>,
 }
 
@@ -173,6 +174,7 @@ impl AppState {
             alerts: Vector::new(),
             finder: Finder::new(),
             lyrics: Promise::Empty,
+            lyrics_visible: false,
             credits: None,
         }
     }
