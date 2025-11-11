@@ -11,6 +11,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use druid::{Data, Lens, Size};
 use platform_dirs::AppDirs;
 use psst_core::{
+    audio::equalizer::{EqualizerConfig, EqualizerPreset},
     cache::{mkdir_if_not_exists, CacheHandle},
     connection::Credentials,
     player::PlaybackConfig,
@@ -48,6 +49,7 @@ impl Preferences {
 pub enum PreferencesTab {
     General,
     Appearance,
+    Equalizer,
     Account,
     Cache,
     About,
@@ -139,6 +141,12 @@ pub struct Config {
     pub lastfm_enable: bool,
     #[serde(default = "default_sidebar_visible")]
     pub sidebar_visible: bool,
+    #[data(ignore)]
+    #[serde(default)]
+    pub equalizer: EqualizerConfig,
+    #[data(ignore)]
+    #[serde(default)]
+    pub custom_equalizer_presets: Vec<EqualizerPreset>,
 }
 
 impl Default for Config {
@@ -166,6 +174,8 @@ impl Default for Config {
             lastfm_api_secret: None,
             lastfm_enable: false,
             sidebar_visible: true,
+            equalizer: Default::default(),
+            custom_equalizer_presets: Vec::new(),
         }
     }
 }
@@ -252,6 +262,7 @@ impl Config {
     pub fn playback(&self) -> PlaybackConfig {
         PlaybackConfig {
             bitrate: self.audio_quality.as_bitrate(),
+            equalizer: self.equalizer.clone(),
             ..PlaybackConfig::default()
         }
     }

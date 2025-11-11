@@ -92,6 +92,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                 |active, _, _| match active {
                     PreferencesTab::General => general_tab_widget().boxed(),
                     PreferencesTab::Appearance => appearance_tab_widget().boxed(),
+                    PreferencesTab::Equalizer => equalizer_tab_widget().boxed(),
                     PreferencesTab::Account => {
                         account_tab_widget(AccountTab::InPreferences).boxed()
                     }
@@ -149,6 +150,12 @@ fn tabs_widget() -> impl Widget<AppState> {
             "Appearance",
             &icons::PLAYLIST,
             PreferencesTab::Appearance,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Equalizer",
+            &icons::MUSIC_NOTE,
+            PreferencesTab::Equalizer,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -1068,6 +1075,91 @@ fn cache_tab_widget() -> impl Widget<AppState> {
 
     col.controller(CacheController::new())
         .lens(AppState::preferences)
+}
+
+fn equalizer_tab_widget() -> impl Widget<AppState> {
+    use psst_core::audio::equalizer::EqualizerPreset;
+    
+    let mut col = Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true);
+
+    // Enable/Disable toggle
+    col = col
+        .with_child(Label::new("Equalizer").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Label::new("Enable Equalizer")
+                .with_text_color(theme::PLACEHOLDER_COLOR),
+        )
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Button::new(|data: &AppState, _: &_| {
+                if data.config.equalizer.enabled {
+                    "Disable Equalizer".to_string()
+                } else {
+                    "Enable Equalizer".to_string()
+                }
+            })
+            .on_click(|_ctx, data: &mut AppState, _| {
+                data.config.equalizer.enabled = !data.config.equalizer.enabled;
+                data.config.save();
+            }),
+        );
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    // Preset selector
+    col = col
+        .with_child(Label::new("Presets").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Choose a preset or customize your own equalizer curve below.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0));
+
+    // Add buttons for each preset
+    let presets = EqualizerPreset::built_in_presets();
+    let mut preset_row = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
+    
+    for (i, preset) in presets.iter().enumerate() {
+        let preset_clone = preset.clone();
+        preset_row = preset_row.with_child(
+            Button::new(preset.name.clone())
+                .on_click(move |_ctx, data: &mut AppState, _| {
+                    data.config.equalizer.bands = preset_clone.bands.clone();
+                    data.config.save();
+                })
+                .padding((theme::grid(0.5), theme::grid(0.5)))
+        );
+        if i < presets.len() - 1 {
+            preset_row = preset_row.with_spacer(theme::grid(1.0));
+        }
+    }
+    col = col.with_child(preset_row);
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    // Custom EQ bands
+    col = col
+        .with_child(Label::new("Custom Equalizer").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Adjust individual frequency bands (in dB, -12 to +12).")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0));
+
+    // Add sliders for each band (we'll create a simplified version with fewer bands)
+    col = col.with_child(
+        Label::new("EQ band controls coming soon - use presets for now")
+            .with_text_color(theme::PLACEHOLDER_COLOR),
+    );
+
+    col
 }
 
 fn about_tab_widget() -> impl Widget<AppState> {
