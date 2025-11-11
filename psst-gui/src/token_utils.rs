@@ -91,18 +91,40 @@ impl TokenUtils {
         save: bool,
     ) {
         log::info!("TokenUtils: persist save={save} clear_refresh_if_none={clear_refresh_if_none}");
-        // Access token
-        config.oauth_bearer = access_token.map(|s| s.to_string());
+        
+        // If using profiles, store in the active profile
+        if let Some(profile_id) = config.profile_manager.active_profile_id.as_ref() {
+            let profile_id = profile_id.clone();
+            config.profile_manager.update_profile(&profile_id, |profile| {
+                // Access token
+                profile.oauth_bearer = access_token.map(|s| s.to_string());
+                
+                // Refresh token
+                if let Some(rt) = refresh_token {
+                    profile.oauth_refresh_token = Some(rt.to_string());
+                } else if clear_refresh_if_none {
+                    profile.oauth_refresh_token = None;
+                }
+            });
+            
+            if save {
+                config.profile_manager.save();
+            }
+        } else {
+            // Fall back to default config storage
+            // Access token
+            config.oauth_bearer = access_token.map(|s| s.to_string());
 
-        // Refresh token
-        if let Some(rt) = refresh_token {
-            config.oauth_refresh_token = Some(rt.to_string());
-        } else if clear_refresh_if_none {
-            config.oauth_refresh_token = None;
-        }
+            // Refresh token
+            if let Some(rt) = refresh_token {
+                config.oauth_refresh_token = Some(rt.to_string());
+            } else if clear_refresh_if_none {
+                config.oauth_refresh_token = None;
+            }
 
-        if save {
-            config.save();
+            if save {
+                config.save();
+            }
         }
     }
 
@@ -139,12 +161,19 @@ impl TokenUtils {
     /// - Access token is applied as-is (cleared if None).
     /// - Refresh token is applied as-is (cleared if None).
     pub fn install_from_config(session: &SessionService, config: &Config) {
-        let access_state = if config.oauth_bearer.is_some() {
+        // Get tokens from active profile if available, otherwise use default config
+        let (oauth_bearer, oauth_refresh_token) = if let Some(profile) = config.profile_manager.active_profile() {
+            (profile.oauth_bearer.as_deref(), profile.oauth_refresh_token.as_deref())
+        } else {
+            (config.oauth_bearer.as_deref(), config.oauth_refresh_token.as_deref())
+        };
+        
+        let access_state = if oauth_bearer.is_some() {
             "set"
         } else {
             "none"
         };
-        let refresh_state = if config.oauth_refresh_token.is_some() {
+        let refresh_state = if oauth_refresh_token.is_some() {
             "set"
         } else {
             "none"
@@ -154,8 +183,8 @@ impl TokenUtils {
         );
         Self::apply_runtime_tokens(
             session,
-            config.oauth_bearer.as_deref(),
-            config.oauth_refresh_token.as_deref(),
+            oauth_bearer,
+            oauth_refresh_token,
             true,
         );
     }
@@ -177,7 +206,15 @@ impl TokenUtils {
             "TokenUtils: apply_refresh_result(rotated_refresh={})",
             maybe_rotated_refresh.is_some()
         );
-        let refresh = maybe_rotated_refresh.or_else(|| config.oauth_refresh_token.clone());
+        
+        // Get existing refresh token from profile if available
+        let existing_refresh = if let Some(profile) = config.profile_manager.active_profile() {
+            profile.oauth_refresh_token.clone()
+        } else {
+            config.oauth_refresh_token.clone()
+        };
+        
+        let refresh = maybe_rotated_refresh.or(existing_refresh);
         Self::apply_and_persist(
             session,
             config,
