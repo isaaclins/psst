@@ -396,17 +396,23 @@ impl PlaybackController {
                         // Set details (track name is always shown)
                         activity = activity.details(now_playing.item.name().as_ref());
 
-                        // Set state (artist and/or album based on privacy settings)
+                        // Set state (artist and/or album for tracks, show name for episodes)
                         let mut state_parts = Vec::new();
-                        if config.presence_show_artist {
-                            if let Playable::Track(track) = &now_playing.item {
-                                state_parts.push(track.artist_name().to_string());
+                        match &now_playing.item {
+                            Playable::Track(track) => {
+                                if config.presence_show_artist {
+                                    state_parts.push(track.artist_name().to_string());
+                                }
+                                if config.presence_show_album {
+                                    if let Some(album) = &track.album {
+                                        state_parts.push(album.name.to_string());
+                                    }
+                                }
                             }
-                        }
-                        if config.presence_show_album {
-                            if let Playable::Track(track) = &now_playing.item {
-                                if let Some(album) = &track.album {
-                                    state_parts.push(album.name.to_string());
+                            Playable::Episode(episode) => {
+                                // For episodes, show the podcast name
+                                if config.presence_show_artist {
+                                    state_parts.push(episode.show.name.to_string());
                                 }
                             }
                         }
