@@ -316,7 +316,27 @@ fn main_panel_widget() -> impl Widget<AppState> {
     Flex::column()
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .with_child(topbar_widget())
-        .with_flex_child(Overlay::bottom(route_widget(), alert_widget()), 1.0)
+        // The main content area: the central route view and an optional right-hand lyrics panel.
+        .with_flex_child(
+            Either::new(
+                // If visible and a track is playing, show a draggable split between center and lyrics.
+                |data: &AppState, _| data.lyrics_visible && data.playback.now_playing.is_some(),
+                // When visible: Split the central route view and the lyrics panel. The lyrics panel
+                // has a starting fixed width but the user can drag the divider to resize.
+                Split::columns(
+                    Overlay::bottom(route_widget(), alert_widget()),
+                    lyrics::lyrics_widget().padding(theme::grid(1.0)).fix_width(420.0),
+                )
+                .split_point(0.75)
+                .bar_size(6.0)
+                .min_size(150.0, 300.0)
+                .solid_bar(true)
+                .boxed(),
+                // Otherwise: just show the central route view which will fill the available space.
+                Overlay::bottom(route_widget(), alert_widget()).boxed(),
+            ),
+            1.0,
+        )
         .with_child(playback::panel_widget())
         .background(theme::BACKGROUND_LIGHT)
 }
