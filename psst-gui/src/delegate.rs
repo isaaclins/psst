@@ -229,6 +229,28 @@ impl AppDelegate<AppState> for Delegate {
                 true,
             );
             Handled::Yes
+        } else if let Some(file_info) = cmd.get(commands::SAVE_FILE_AS) {
+            // Handle theme export
+            if let Err(e) = data.config.custom_theme.export_to_file(&file_info.path()) {
+                data.error_alert(format!("Failed to export theme: {}", e));
+            } else {
+                data.info_alert("Theme exported successfully");
+            }
+            Handled::Yes
+        } else if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
+            // Handle theme import
+            match crate::data::CustomTheme::import_from_file(&file_info.path()) {
+                Ok(theme) => {
+                    data.config.custom_theme = theme;
+                    data.config.theme = crate::data::Theme::Custom;
+                    data.config.save();
+                    data.info_alert("Theme imported successfully");
+                }
+                Err(e) => {
+                    data.error_alert(format!("Failed to import theme: {}", e));
+                }
+            }
+            Handled::Yes
         } else {
             Handled::No
         }

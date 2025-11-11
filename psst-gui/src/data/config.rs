@@ -295,6 +295,18 @@ pub struct CustomTheme {
     pub primary_text: String,
     pub accent: String,
     pub highlight: String,
+    #[serde(default = "default_font_family")]
+    pub font_family: String,
+    #[serde(default = "default_font_size")]
+    pub font_size: String,
+}
+
+fn default_font_family() -> String {
+    "System UI".into()
+}
+
+fn default_font_size() -> String {
+    "13.0".into()
 }
 
 impl Default for CustomTheme {
@@ -305,7 +317,29 @@ impl Default for CustomTheme {
             primary_text: "#f2f2f2".into(),
             accent: "#1db954".into(),
             highlight: "#3a7bd5".into(),
+            font_family: default_font_family(),
+            font_size: default_font_size(),
         }
+    }
+}
+
+impl CustomTheme {
+    pub fn to_json(&self) -> Result<String, String> {
+        serde_json::to_string_pretty(self).map_err(|e| e.to_string())
+    }
+
+    pub fn from_json(json: &str) -> Result<Self, String> {
+        serde_json::from_str(json).map_err(|e| e.to_string())
+    }
+
+    pub fn export_to_file(&self, path: &Path) -> Result<(), String> {
+        let json = self.to_json()?;
+        fs::write(path, json).map_err(|e| e.to_string())
+    }
+
+    pub fn import_from_file(path: &Path) -> Result<Self, String> {
+        let json = fs::read_to_string(path).map_err(|e| e.to_string())?;
+        Self::from_json(&json)
     }
 }
 
