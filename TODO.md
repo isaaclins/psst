@@ -1,4 +1,7 @@
+
+
 # TODO: Provide multi-account support allowing quick switching between Spotify profiles with isolated preferences and caches by building a single settings view that manages profiles, handles per-account credential vaulting, maps dedicated cache directories, and triggers a session handoff hook for player state.
+
 
 # TODO: Offer advanced equalizer presets and custom EQ curve editor tied into the playback pipeline by extending the DSP graph, shipping a starter preset library, letting users save/load sound profiles from the settings view, persisting custom curves, and surfacing them in both CLI and GUI.
 
