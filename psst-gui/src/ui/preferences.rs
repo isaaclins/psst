@@ -1,5 +1,6 @@
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -95,6 +96,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                     PreferencesTab::Account => {
                         account_tab_widget(AccountTab::InPreferences).boxed()
                     }
+                    PreferencesTab::Profiles => profiles_tab_widget().boxed(),
                     PreferencesTab::Cache => cache_tab_widget().boxed(),
                     PreferencesTab::About => about_tab_widget().boxed(),
                 },
@@ -155,6 +157,12 @@ fn tabs_widget() -> impl Widget<AppState> {
             "Account",
             &icons::ACCOUNT,
             PreferencesTab::Account,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Profiles",
+            &icons::ACCOUNT,
+            PreferencesTab::Profiles,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -1096,4 +1104,127 @@ fn about_tab_widget() -> impl Widget<AppState> {
         .with_child(commit_hash)
         .with_child(build_time)
         .with_child(remote_url)
+}
+
+fn profiles_tab_widget() -> impl Widget<AppState> {
+    let mut col = Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true);
+
+    col = col
+        .with_child(Label::new("Profiles").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Label::new(
+                "Manage multiple Spotify accounts with isolated preferences and caches. \
+                 Switch between profiles to access different accounts.",
+            )
+            .with_text_color(theme::PLACEHOLDER_COLOR)
+            .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(3.0));
+
+    // Active profile display
+    col = col
+        .with_child(Label::new("Active Profile").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(Label::dynamic(|state: &AppState, _| {
+            if let Some(profile) = state.config.profile_manager.active_profile() {
+                format!("{} ({})", profile.name, profile.username().unwrap_or("Not logged in"))
+            } else {
+                "Default Profile".to_string()
+            }
+        }))
+        .with_spacer(theme::grid(3.0));
+
+    // Profile list
+    col = col
+        .with_child(Label::new("All Profiles").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0));
+
+    // Show list of profiles or message if none
+    col = col.with_child(ViewSwitcher::new(
+        |state: &AppState, _| state.config.profile_manager.profiles.len(),
+        |count, _, _| {
+            if *count == 0 {
+                Label::new("No profiles created yet. Create your first profile below.")
+                    .with_text_color(theme::PLACEHOLDER_COLOR)
+                    .boxed()
+            } else {
+                profile_list_widget().boxed()
+            }
+        },
+    ));
+
+    col = col
+        .with_spacer(theme::grid(3.0))
+        .with_child(
+            Button::new("Create New Profile").on_click(|ctx, data: &mut AppState, _| {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                // Generate a unique profile ID based on timestamp
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_micros();
+                let profile_id = Arc::from(format!("profile_{}", timestamp));
+                let profile_name = Arc::from(format!("Profile {}", data.config.profile_manager.profiles.len() + 1));
+                
+                let profile = crate::data::Profile::new(profile_id, profile_name);
+                data.config.profile_manager.add_profile(profile);
+                data.config.profile_manager.save();
+                ctx.request_paint();
+            }),
+        );
+
+    col
+}
+
+fn profile_list_widget() -> impl Widget<AppState> {
+    use druid::widget::List;
+    
+    List::new(|| {
+        Flex::row()
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .with_flex_child(
+                Flex::column()
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .with_child(Label::dynamic(|profile: &crate::data::Profile, _| {
+                        profile.name.to_string()
+                    }).with_font(theme::UI_FONT_MEDIUM))
+                    .with_child(Label::dynamic(|profile: &crate::data::Profile, _| {
+                        profile.username().unwrap_or("Not logged in").to_string()
+                    }).with_text_size(theme::TEXT_SIZE_SMALL))
+                    .padding((theme::grid(1.0), theme::grid(0.5))),
+                1.0,
+            )
+            .with_spacer(theme::grid(1.0))
+            .with_child(
+                Button::new("Switch").on_click(
+                    |ctx, profile: &mut crate::data::Profile, _| {
+                        let profile_id = profile.id.clone();
+                        ctx.submit_command(cmd::SWITCH_PROFILE.with(profile_id));
+                    },
+                ),
+            )
+            .with_spacer(theme::grid(0.5))
+            .with_child(
+                Button::new("Delete").on_click(
+                    |ctx, profile: &mut crate::data::Profile, _| {
+                        let profile_id = profile.id.clone();
+                        ctx.submit_command(cmd::DELETE_PROFILE.with(profile_id));
+                    },
+                ),
+            )
+            .padding(theme::grid(1.0))
+            .background(theme::BACKGROUND_LIGHT)
+            .rounded(theme::BUTTON_BORDER_RADIUS)
+    })
+    .lens(
+        druid::lens::Identity.map(
+            |state: &AppState| state.config.profile_manager.profiles.as_ref().clone().into(),
+            |state: &mut AppState, profiles: druid::im::Vector<crate::data::Profile>| {
+                state.config.profile_manager.profiles = Arc::new(profiles.iter().cloned().collect());
+            },
+        ),
+    )
 }

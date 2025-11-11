@@ -38,7 +38,8 @@ pub use crate::data::{
         Artist, ArtistAlbums, ArtistDetail, ArtistInfo, ArtistLink, ArtistStats, ArtistTracks,
     },
     config::{
-        AudioQuality, Authentication, Config, CustomTheme, Preferences, PreferencesTab, Theme,
+        AudioQuality, Authentication, Config, CustomTheme, Preferences, PreferencesTab, Profile,
+        ProfileManager, Theme,
     },
     ctx::Ctx,
     find::{FindQuery, Finder, MatchFindQuery},

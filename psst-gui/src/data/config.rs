@@ -3,6 +3,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{BufReader, BufWriter},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 #[cfg(target_family = "unix")]
@@ -49,6 +50,7 @@ pub enum PreferencesTab {
     General,
     Appearance,
     Account,
+    Profiles,
     Cache,
     About,
 }
@@ -104,10 +106,157 @@ impl Authentication {
 
 const APP_NAME: &str = "Psst";
 const CONFIG_FILENAME: &str = "config.json";
+const PROFILES_FILENAME: &str = "profiles.json";
 const PROXY_ENV_VAR: &str = "SOCKS_PROXY";
 
 fn default_sidebar_visible() -> bool {
     true
+}
+
+/// Represents a user profile with isolated settings and cache
+#[derive(Clone, Debug, Data, Lens, Serialize, Deserialize)]
+pub struct Profile {
+    pub id: Arc<str>,
+    pub name: Arc<str>,
+    #[data(ignore)]
+    pub credentials: Option<Credentials>,
+    #[serde(alias = "oauth_token_override")]
+    pub oauth_bearer: Option<String>,
+    pub oauth_refresh_token: Option<String>,
+    pub lastfm_session_key: Option<String>,
+    pub lastfm_api_key: Option<String>,
+    pub lastfm_api_secret: Option<String>,
+    pub lastfm_enable: bool,
+    #[serde(default)]
+    pub created_at: u64,
+}
+
+impl Profile {
+    pub fn new(id: Arc<str>, name: Arc<str>) -> Self {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let created_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        
+        Self {
+            id,
+            name,
+            credentials: None,
+            oauth_bearer: None,
+            oauth_refresh_token: None,
+            lastfm_session_key: None,
+            lastfm_api_key: None,
+            lastfm_api_secret: None,
+            lastfm_enable: false,
+            created_at,
+        }
+    }
+
+    pub fn cache_dir(&self) -> Option<PathBuf> {
+        Config::cache_dir().map(|base| base.join("profiles").join(self.id.as_ref()))
+    }
+
+    pub fn has_credentials(&self) -> bool {
+        self.credentials.is_some()
+    }
+
+    pub fn username(&self) -> Option<&str> {
+        self.credentials
+            .as_ref()
+            .and_then(|c| c.username.as_deref())
+    }
+}
+
+/// Manages multiple user profiles
+#[derive(Clone, Debug, Data, Lens, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProfileManager {
+    pub profiles: Arc<Vec<Profile>>,
+    pub active_profile_id: Option<Arc<str>>,
+}
+
+impl Default for ProfileManager {
+    fn default() -> Self {
+        Self {
+            profiles: Arc::new(Vec::new()),
+            active_profile_id: None,
+        }
+    }
+}
+
+impl ProfileManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn active_profile(&self) -> Option<&Profile> {
+        self.active_profile_id
+            .as_ref()
+            .and_then(|id| self.profiles.iter().find(|p| &p.id == id))
+    }
+
+    pub fn add_profile(&mut self, profile: Profile) {
+        Arc::make_mut(&mut self.profiles).push(profile);
+    }
+
+    pub fn remove_profile(&mut self, profile_id: &str) {
+        Arc::make_mut(&mut self.profiles).retain(|p| p.id.as_ref() != profile_id);
+        
+        // Clear active profile if it was removed
+        if let Some(active_id) = &self.active_profile_id {
+            if active_id.as_ref() == profile_id {
+                self.active_profile_id = None;
+            }
+        }
+    }
+
+    pub fn set_active_profile(&mut self, profile_id: Arc<str>) {
+        if self.profiles.iter().any(|p| p.id == profile_id) {
+            self.active_profile_id = Some(profile_id);
+        }
+    }
+
+    pub fn update_profile<F>(&mut self, profile_id: &str, update_fn: F)
+    where
+        F: FnOnce(&mut Profile),
+    {
+        if let Some(profile) = Arc::make_mut(&mut self.profiles)
+            .iter_mut()
+            .find(|p| p.id.as_ref() == profile_id)
+        {
+            update_fn(profile);
+        }
+    }
+
+    pub fn save(&self) {
+        let dir = Config::config_dir().expect("Failed to get config dir");
+        let path = dir.join(PROFILES_FILENAME);
+        mkdir_if_not_exists(&dir).expect("Failed to create config dir");
+
+        let mut options = OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(target_family = "unix")]
+        options.mode(0o600);
+
+        let file = options.open(&path).expect("Failed to create profiles file");
+        let writer = BufWriter::new(file);
+
+        serde_json::to_writer_pretty(writer, self).expect("Failed to write profiles");
+        log::info!("saved profiles: {:?}", &path);
+    }
+
+    pub fn load() -> Option<Self> {
+        let dir = Config::config_dir()?;
+        let path = dir.join(PROFILES_FILENAME);
+        if let Ok(file) = File::open(&path) {
+            log::info!("loading profiles: {:?}", &path);
+            let reader = BufReader::new(file);
+            serde_json::from_reader(reader).ok()
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Debug, Data, Lens, Serialize, Deserialize)]
@@ -139,6 +288,8 @@ pub struct Config {
     pub lastfm_enable: bool,
     #[serde(default = "default_sidebar_visible")]
     pub sidebar_visible: bool,
+    #[serde(default)]
+    pub profile_manager: ProfileManager,
 }
 
 impl Default for Config {
@@ -166,6 +317,7 @@ impl Default for Config {
             lastfm_api_secret: None,
             lastfm_enable: false,
             sidebar_visible: true,
+            profile_manager: ProfileManager::default(),
         }
     }
 }
@@ -186,6 +338,14 @@ impl Config {
 
     pub fn cache_dir() -> Option<PathBuf> {
         Self::app_dirs().map(|dirs| dirs.cache_dir)
+    }
+
+    pub fn cache_dir_for_profile(&self) -> Option<PathBuf> {
+        if let Some(profile) = self.profile_manager.active_profile() {
+            profile.cache_dir()
+        } else {
+            Self::cache_dir()
+        }
     }
 
     pub fn config_dir() -> Option<PathBuf> {
@@ -225,26 +385,58 @@ impl Config {
     }
 
     pub fn has_credentials(&self) -> bool {
-        self.credentials.is_some()
+        if let Some(profile) = self.profile_manager.active_profile() {
+            profile.has_credentials()
+        } else {
+            self.credentials.is_some()
+        }
     }
 
     pub fn store_credentials(&mut self, credentials: Credentials) {
-        self.credentials = Some(credentials);
+        if let Some(profile_id) = self.profile_manager.active_profile_id.as_ref() {
+            let profile_id = profile_id.clone();
+            self.profile_manager.update_profile(&profile_id, |profile| {
+                profile.credentials = Some(credentials);
+            });
+            self.profile_manager.save();
+        } else {
+            self.credentials = Some(credentials);
+        }
     }
 
     pub fn clear_credentials(&mut self) {
-        self.credentials = Default::default();
+        if let Some(profile_id) = self.profile_manager.active_profile_id.as_ref() {
+            let profile_id = profile_id.clone();
+            self.profile_manager.update_profile(&profile_id, |profile| {
+                profile.credentials = None;
+                profile.oauth_bearer = None;
+                profile.oauth_refresh_token = None;
+            });
+            self.profile_manager.save();
+        } else {
+            self.credentials = Default::default();
+        }
     }
 
     pub fn username(&self) -> Option<&str> {
-        self.credentials
-            .as_ref()
-            .and_then(|c| c.username.as_deref())
+        if let Some(profile) = self.profile_manager.active_profile() {
+            profile.username()
+        } else {
+            self.credentials
+                .as_ref()
+                .and_then(|c| c.username.as_deref())
+        }
     }
 
     pub fn session(&self) -> SessionConfig {
+        let creds = if let Some(profile) = self.profile_manager.active_profile() {
+            profile.credentials.clone()
+        } else {
+            self.credentials.clone()
+        };
+        
         SessionConfig {
-            login_creds: self.credentials.clone().expect("Missing credentials"),
+            login_creds: creds.expect("Missing credentials"),
             proxy_url: Config::proxy(),
         }
     }

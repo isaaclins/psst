@@ -32,6 +32,10 @@ pub const FIND_IN_SAVED_TRACKS: Selector<Find> = Selector::new("find-in-saved-tr
 pub const SESSION_CONNECT: Selector = Selector::new("app.session-connect");
 pub const LOG_OUT: Selector = Selector::new("app.log-out");
 
+// Profiles
+pub const SWITCH_PROFILE: Selector<Arc<str>> = Selector::new("app.switch-profile");
+pub const DELETE_PROFILE: Selector<Arc<str>> = Selector::new("app.delete-profile");
+
 // Navigation
 pub const NAVIGATE: Selector<Nav> = Selector::new("app.navigates");
 pub const NAVIGATE_BACK: Selector<usize> = Selector::new("app.navigate-back");
