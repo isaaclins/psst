@@ -248,13 +248,17 @@ impl Player {
                     let config = self.config.clone();
                     move || {
                         let result = item.load(&session, cdn, cache, &config);
-                        sender.send(PlayerEvent::Loaded { item, result }).unwrap();
+                        if let Err(e) = sender.send(PlayerEvent::Loaded { item, result }) {
+                            log::error!("failed to send Loaded event: {e:?}");
+                        }
                     }
                 })
             }
         };
 
-        self.sender.send(PlayerEvent::Loading { item }).unwrap();
+        if let Err(e) = self.sender.send(PlayerEvent::Loading { item }) {
+            log::error!("failed to send Loading event: {e:?}");
+        }
         self.state = PlayerState::Loading {
             item,
             _loading_handle: loading_handle,
@@ -273,9 +277,9 @@ impl Player {
             let config = self.config.clone();
             move || {
                 let result = item.load(&session, cdn, cache, &config);
-                sender
-                    .send(PlayerEvent::Preloaded { item, result })
-                    .unwrap();
+                if let Err(e) = sender.send(PlayerEvent::Preloaded { item, result }) {
+                    log::error!("failed to send Preloaded event: {e:?}");
+                }
             }
         });
         self.preload = PreloadState::Preloading {
@@ -294,9 +298,9 @@ impl Player {
         let position = Duration::default();
         self.playback_mgr.play(loaded_item);
         self.state = PlayerState::Playing { path, position };
-        self.sender
-            .send(PlayerEvent::Playing { path, position })
-            .unwrap();
+        if let Err(e) = self.sender.send(PlayerEvent::Playing { path, position }) {
+            log::error!("failed to send Playing event: {e:?}");
+        }
     }
 
     fn pause(&mut self) {
@@ -304,9 +308,9 @@ impl Player {
             PlayerState::Playing { path, position } | PlayerState::Paused { path, position } => {
                 log::info!("pausing playback");
                 self.audio_output_sink.pause();
-                self.sender
-                    .send(PlayerEvent::Pausing { path, position })
-                    .unwrap();
+                if let Err(e) = self.sender.send(PlayerEvent::Pausing { path, position }) {
+                    log::error!("failed to send Pausing event: {e:?}");
+                }
                 self.state = PlayerState::Paused { path, position };
             }
             _ => {
@@ -320,9 +324,9 @@ impl Player {
             PlayerState::Playing { path, position } | PlayerState::Paused { path, position } => {
                 log::info!("resuming playback");
                 self.audio_output_sink.resume();
-                self.sender
-                    .send(PlayerEvent::Resuming { path, position })
-                    .unwrap();
+                if let Err(e) = self.sender.send(PlayerEvent::Resuming { path, position }) {
+                    log::error!("failed to send Resuming event: {e:?}");
+                }
                 self.state = PlayerState::Playing { path, position };
             }
             _ => {
@@ -364,7 +368,9 @@ impl Player {
     }
 
     fn stop(&mut self) {
-        self.sender.send(PlayerEvent::Stopped).unwrap();
+        if let Err(e) = self.sender.send(PlayerEvent::Stopped) {
+            log::error!("failed to send Stopped event: {e:?}");
+        }
         self.audio_output_sink.stop();
         self.state = PlayerState::Stopped;
         self.queue.clear();

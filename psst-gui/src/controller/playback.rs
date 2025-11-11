@@ -116,41 +116,55 @@ impl PlaybackController {
             // Forward events that affect the UI state to the UI thread.
             match &event {
                 PlayerEvent::Loading { item } => {
-                    event_sink
+                    if let Err(e) = event_sink
                         .submit_command(cmd::PLAYBACK_LOADING, item.item_id, widget_id)
-                        .unwrap();
+                    {
+                        log::error!("failed to submit PLAYBACK_LOADING command: {e:?}");
+                    }
                 }
                 PlayerEvent::Playing { path, position } => {
                     let progress = position.to_owned();
-                    event_sink
+                    if let Err(e) = event_sink
                         .submit_command(cmd::PLAYBACK_PLAYING, (path.item_id, progress), widget_id)
-                        .unwrap();
+                    {
+                        log::error!("failed to submit PLAYBACK_PLAYING command: {e:?}");
+                    }
                 }
                 PlayerEvent::Pausing { .. } => {
-                    event_sink
+                    if let Err(e) = event_sink
                         .submit_command(cmd::PLAYBACK_PAUSING, (), widget_id)
-                        .unwrap();
+                    {
+                        log::error!("failed to submit PLAYBACK_PAUSING command: {e:?}");
+                    }
                 }
                 PlayerEvent::Resuming { .. } => {
-                    event_sink
+                    if let Err(e) = event_sink
                         .submit_command(cmd::PLAYBACK_RESUMING, (), widget_id)
-                        .unwrap();
+                    {
+                        log::error!("failed to submit PLAYBACK_RESUMING command: {e:?}");
+                    }
                 }
                 PlayerEvent::Position { position, .. } => {
                     let progress = position.to_owned();
-                    event_sink
+                    if let Err(e) = event_sink
                         .submit_command(cmd::PLAYBACK_PROGRESS, progress, widget_id)
-                        .unwrap();
+                    {
+                        log::error!("failed to submit PLAYBACK_PROGRESS command: {e:?}");
+                    }
                 }
                 PlayerEvent::Blocked { .. } => {
-                    event_sink
+                    if let Err(e) = event_sink
                         .submit_command(cmd::PLAYBACK_BLOCKED, (), widget_id)
-                        .unwrap();
+                    {
+                        log::error!("failed to submit PLAYBACK_BLOCKED command: {e:?}");
+                    }
                 }
                 PlayerEvent::Stopped => {
-                    event_sink
+                    if let Err(e) = event_sink
                         .submit_command(cmd::PLAYBACK_STOPPED, (), widget_id)
-                        .unwrap();
+                    {
+                        log::error!("failed to submit PLAYBACK_STOPPED command: {e:?}");
+                    }
                 }
                 _ => {}
             }
@@ -158,6 +172,7 @@ impl PlaybackController {
             // Let the player react to its internal events.
             player.handle(event);
         }
+        log::warn!("player event service loop has ended");
     }
 
     fn create_media_controls(
@@ -205,7 +220,9 @@ impl PlaybackController {
                 return;
             }
         };
-        sender.send(cmd).unwrap();
+        if let Err(e) = sender.send(cmd) {
+            log::error!("failed to send media control command to player: {e:?}");
+        }
     }
 
     fn update_media_control_playback(&mut self, playback: &Playback) {
