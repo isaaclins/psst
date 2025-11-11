@@ -41,6 +41,7 @@ pub struct PlaybackController {
     has_scrobbled: bool,
     scrobbler: Option<Scrobbler>,
     startup: bool,
+    sender_disconnected: bool,
 }
 fn init_scrobbler_instance(data: &AppState) -> Option<Scrobbler> {
     if data.config.lastfm_enable {
@@ -78,6 +79,7 @@ impl PlaybackController {
             has_scrobbled: false,
             scrobbler: None,
             startup: true,
+            sender_disconnected: false,
         }
     }
 
@@ -273,9 +275,13 @@ impl PlaybackController {
 
     fn send(&mut self, event: PlayerEvent) {
         if let Some(s) = &self.sender {
-            s.send(event)
-                .map_err(|e| log::error!("error sending message: {e:?}"))
-                .ok();
+            if let Err(e) = s.send(event) {
+                if !self.sender_disconnected {
+                    log::error!("player thread has disconnected, commands will be ignored: {e:?}");
+                    log::error!("this may be caused by rapid playback control inputs or an internal error");
+                    self.sender_disconnected = true;
+                }
+            }
         }
     }
 
