@@ -9,7 +9,10 @@ use std::{mem, thread, thread::JoinHandle, time::Duration};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 
 use crate::{
-    audio::output::{AudioOutput, AudioSink, DefaultAudioOutput, DefaultAudioSink},
+    audio::{
+        equalizer::EqualizerConfig,
+        output::{AudioOutput, AudioSink, DefaultAudioOutput, DefaultAudioSink},
+    },
     cache::CacheHandle,
     cdn::CdnHandle,
     error::Error,
@@ -30,6 +33,7 @@ const STOP_AFTER_CONSECUTIVE_LOADING_FAILURES: usize = 3;
 pub struct PlaybackConfig {
     pub bitrate: usize,
     pub pregain: f32,
+    pub equalizer: EqualizerConfig,
 }
 
 impl Default for PlaybackConfig {
@@ -37,6 +41,7 @@ impl Default for PlaybackConfig {
         Self {
             bitrate: 320,
             pregain: 3.0,
+            equalizer: EqualizerConfig::default(),
         }
     }
 }

@@ -18,6 +18,7 @@ use crate::{
     actor::{Act, Actor, ActorHandle},
     audio::{
         decode::AudioDecoder,
+        equalizer::Equalizer,
         output::{AudioSink, DefaultAudioSink},
         resample::ResamplingQuality,
         source::{AudioSource, ResampledSource, StereoMappedSource},
@@ -51,6 +52,7 @@ impl PlaybackManager {
             loaded.file,
             loaded.source,
             loaded.norm_factor,
+            loaded.equalizer_config,
             self.event_send.clone(),
         );
         self.current = Some((path, source.actor.sender()));
@@ -101,6 +103,7 @@ pub struct DecoderSource {
     reported: u64,
     end_of_track: bool,
     norm_factor: f32,
+    equalizer: Equalizer,
     signal_spec: SignalSpec,
     time_base: TimeBase,
 }
@@ -110,6 +113,7 @@ impl DecoderSource {
         file: MediaFile,
         decoder: AudioDecoder,
         norm_factor: f32,
+        equalizer_config: crate::audio::equalizer::EqualizerConfig,
         event_send: Sender<PlayerEvent>,
     ) -> Self {
         const REPORT_PRECISION: Duration = Duration::from_millis(900);
@@ -149,12 +153,16 @@ impl DecoderSource {
         });
         let _ = actor.send(Msg::Read);
 
+        // Create the equalizer for this audio stream
+        let equalizer = Equalizer::new(equalizer_config, signal_spec.rate);
+
         Self {
             file,
             actor,
             consumer,
             event_send,
             norm_factor,
+            equalizer,
             signal_spec,
             time_base,
             total_samples,
@@ -191,6 +199,9 @@ impl AudioSource for DecoderSource {
         output[..written]
             .iter_mut()
             .for_each(|s| *s *= self.norm_factor);
+
+        // Apply equalizer if enabled
+        self.equalizer.process(&mut output[..written]);
 
         let position = self.written_samples(written as u64);
         if self.should_report(position) {
