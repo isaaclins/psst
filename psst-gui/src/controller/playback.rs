@@ -50,6 +50,8 @@ pub struct PlaybackController {
     media_control_rx: Option<Receiver<PlayerEvent>>,
     // Timestamp of last skip (next/previous) action to debounce rapid clicks.
     last_skip: Option<Instant>,
+    // Store the last LoadQueue payload so we can re-submit it after a player restart.
+    stored_last_load: Option<(Vec<PlaybackItem>, usize)>,
 }
 fn init_scrobbler_instance(data: &AppState) -> Option<Scrobbler> {
     if data.config.lastfm_enable {
@@ -93,6 +95,7 @@ impl PlaybackController {
             stored_widget_id: None,
             media_control_rx: None,
             last_skip: None,
+            stored_last_load: None,
         }
     }
 
@@ -174,6 +177,11 @@ impl PlaybackController {
                 }));
                 self.output.replace(output);
                 log::info!("restarted player service thread");
+                // If we have a previously requested load, re-submit it to restore playback.
+                if let Some((items, position)) = self.stored_last_load.clone() {
+                    log::info!("resubmitting last LoadQueue after restart (items={} pos={})", items.len(), position);
+                    self.send(PlayerEvent::Command(PlayerCommand::LoadQueue { items, position }));
+                }
                 return true;
             }
             Err(e) => {
@@ -421,6 +429,8 @@ impl PlaybackController {
             position
         };
 
+        // remember last load so we can re-submit after a restart if necessary
+        self.stored_last_load = Some((playback_items_vec.clone(), position));
         self.send(PlayerEvent::Command(PlayerCommand::LoadQueue {
             items: playback_items_vec,
             position,
@@ -786,4 +796,26 @@ fn random_lowercase_string(len: usize) -> String {
         chars.push('a');
     }
     chars.into_iter().rev().collect()
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{thread, time::Duration};
+
+    #[test]
+    fn throttle_should_work() {
+        let mut ctrl = PlaybackController::new();
+
+        // First call should not be throttled
+        assert_eq!(ctrl.should_throttle_skip(), false);
+
+        // Immediate second call should be throttled
+        assert_eq!(ctrl.should_throttle_skip(), true);
+
+        // After waiting longer than the debounce window, it should not be throttled
+        thread::sleep(Duration::from_millis(200));
+        assert_eq!(ctrl.should_throttle_skip(), false);
+    }
 }
