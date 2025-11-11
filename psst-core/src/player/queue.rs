@@ -35,14 +35,24 @@ impl Queue {
     pub fn clear(&mut self) {
         self.items.clear();
         self.positions.clear();
+        self.user_items.clear();
         self.position = 0;
+        self.user_items_position = 0;
     }
 
     pub fn fill(&mut self, items: Vec<PlaybackItem>, position: usize) {
         self.positions.clear();
         self.items = items;
         self.position = position;
+        if self.items.is_empty() {
+            self.position = 0;
+            self.user_items_position = self.user_items.len();
+            return;
+        }
         self.compute_positions();
+        if self.position >= self.positions.len() {
+            self.position = self.positions.len().saturating_sub(1);
+        }
     }
 
     pub fn add(&mut self, item: PlaybackItem) {
@@ -92,15 +102,24 @@ impl Queue {
     }
 
     pub fn skip_to_previous(&mut self) {
+        if self.positions.is_empty() {
+            return;
+        }
         self.position = self.previous_position();
     }
 
     pub fn skip_to_next(&mut self) {
+        if self.positions.is_empty() {
+            return;
+        }
         self.handle_added_queue();
         self.position = self.next_position();
     }
 
     pub fn skip_to_following(&mut self) {
+        if self.positions.is_empty() {
+            return;
+        }
         self.handle_added_queue();
         self.position = self.following_position();
     }
@@ -135,7 +154,13 @@ impl Queue {
             QueueBehavior::Sequential | QueueBehavior::Random | QueueBehavior::LoopTrack => {
                 self.position + 1
             }
-            QueueBehavior::LoopAll => (self.position + 1) % self.items.len(),
+            QueueBehavior::LoopAll => {
+                if self.items.is_empty() {
+                    0
+                } else {
+                    (self.position + 1) % self.items.len()
+                }
+            }
         }
     }
 
@@ -143,7 +168,13 @@ impl Queue {
         match self.behavior {
             QueueBehavior::Sequential | QueueBehavior::Random => self.position + 1,
             QueueBehavior::LoopTrack => self.position,
-            QueueBehavior::LoopAll => (self.position + 1) % self.items.len(),
+            QueueBehavior::LoopAll => {
+                if self.items.is_empty() {
+                    0
+                } else {
+                    (self.position + 1) % self.items.len()
+                }
+            }
         }
     }
 }

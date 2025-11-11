@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Sender, Receiver, TryRecvError};
 use druid::{
     im::Vector,
     widget::{prelude::*, Controller},
@@ -21,7 +21,7 @@ use rustfm_scrobble::Scrobbler;
 use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
 };
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH, Instant};
 
 use crate::{
     cmd,
@@ -41,6 +41,15 @@ pub struct PlaybackController {
     has_scrobbled: bool,
     scrobbler: Option<Scrobbler>,
     startup: bool,
+    // Stored parameters for restarting the player thread if it dies.
+    stored_session: Option<SessionService>,
+    stored_config: Option<PlaybackConfig>,
+    stored_event_sink: Option<ExtEventSink>,
+    stored_widget_id: Option<WidgetId>,
+    // Receiver for OS/media-control events routed through the controller so we can throttle.
+    media_control_rx: Option<Receiver<PlayerEvent>>,
+    // Timestamp of last skip (next/previous) action to debounce rapid clicks.
+    last_skip: Option<Instant>,
 }
 fn init_scrobbler_instance(data: &AppState) -> Option<Scrobbler> {
     if data.config.lastfm_enable {
@@ -78,6 +87,12 @@ impl PlaybackController {
             has_scrobbled: false,
             scrobbler: None,
             startup: true,
+            stored_session: None,
+            stored_config: None,
+            stored_event_sink: None,
+            stored_widget_id: None,
+            media_control_rx: None,
+            last_skip: None,
         }
     }
 
@@ -92,23 +107,80 @@ impl PlaybackController {
         let output = DefaultAudioOutput::open().unwrap();
         let cache_dir = Config::cache_dir().unwrap();
         let proxy_url = Config::proxy();
+        let cdn_session = session.clone();
+        let player_session = session.clone();
+        let player_config = config.clone();
         let player = Player::new(
-            session.clone(),
-            Cdn::new(session, proxy_url.as_deref()).unwrap(),
+            player_session,
+            Cdn::new(cdn_session, proxy_url.as_deref()).unwrap(),
             Cache::new(cache_dir).unwrap(),
-            config,
+            player_config,
             &output,
         );
 
-        self.media_controls = Self::create_media_controls(player.sender(), window)
+        // Create a small channel to receive OS media-control events and route them
+        // through the controller so we can apply throttle/debounce logic.
+        let (mc_tx, mc_rx) = crossbeam_channel::unbounded();
+        self.media_control_rx = Some(mc_rx);
+
+        self.media_controls = Self::create_media_controls(mc_tx, window)
             .map_err(|err| log::error!("failed to connect to media control interface: {err:?}"))
             .ok();
+
+        // store parameters so we can restart if the player thread dies
+        self.stored_session = Some(session);
+        self.stored_config = Some(config);
+        self.stored_event_sink = Some(event_sink.clone());
+        self.stored_widget_id = Some(widget_id);
 
         self.sender = Some(player.sender());
         self.thread = Some(thread::spawn(move || {
             Self::service_events(player, event_sink, widget_id);
         }));
         self.output.replace(output);
+    }
+
+    fn restart_service(&mut self) -> bool {
+        // Try to restart player thread without attaching media controls (window may not be available).
+        if self.stored_session.is_none()
+            || self.stored_config.is_none()
+            || self.stored_event_sink.is_none()
+            || self.stored_widget_id.is_none()
+        {
+            return false;
+        }
+
+        let session = self.stored_session.as_ref().unwrap().clone();
+        let config = self.stored_config.as_ref().unwrap().clone();
+        let event_sink = self.stored_event_sink.as_ref().unwrap().clone();
+        let widget_id = *self.stored_widget_id.as_ref().unwrap();
+
+        match DefaultAudioOutput::open() {
+            Ok(output) => {
+                let cache_dir = Config::cache_dir().unwrap();
+                let proxy_url = Config::proxy();
+                let player = Player::new(
+                    session.clone(),
+                    Cdn::new(session.clone(), proxy_url.as_deref()).unwrap(),
+                    Cache::new(cache_dir).unwrap(),
+                    config,
+                    &output,
+                );
+
+                self.sender = Some(player.sender());
+                let evt = event_sink.clone();
+                self.thread = Some(thread::spawn(move || {
+                    Self::service_events(player, evt, widget_id);
+                }));
+                self.output.replace(output);
+                log::info!("restarted player service thread");
+                return true;
+            }
+            Err(e) => {
+                log::error!("failed to reopen audio output during restart: {e:?}");
+                return false;
+            }
+        }
     }
 
     fn service_events(mut player: Player, event_sink: ExtEventSink, widget_id: WidgetId) {
@@ -208,6 +280,18 @@ impl PlaybackController {
         sender.send(cmd).unwrap();
     }
 
+    // Throttle rapid skip/previous requests from the GUI to avoid flooding the player.
+    fn should_throttle_skip(&mut self) -> bool {
+        const DEBOUNCE_MS: u64 = 150;
+        if let Some(last) = self.last_skip {
+            if last.elapsed() < Duration::from_millis(DEBOUNCE_MS) {
+                return true;
+            }
+        }
+        self.last_skip = Some(Instant::now());
+        false
+    }
+
     fn update_media_control_playback(&mut self, playback: &Playback) {
         if let Some(media_controls) = self.media_controls.as_mut() {
             let progress = playback
@@ -256,9 +340,14 @@ impl PlaybackController {
 
     fn send(&mut self, event: PlayerEvent) {
         if let Some(s) = &self.sender {
-            s.send(event)
-                .map_err(|e| log::error!("error sending message: {e:?}"))
-                .ok();
+            if let Err(e) = s.send(event) {
+                log::error!("error sending message: {e:?}");
+                // Mark sender as dead and attempt restart.
+                self.sender = None;
+                if self.restart_service() {
+                    log::info!("player service restarted");
+                }
+            }
         }
     }
 
@@ -351,10 +440,18 @@ impl PlaybackController {
     }
 
     fn previous(&mut self) {
+        if self.should_throttle_skip() {
+            log::debug!("previous skipped due to debounce");
+            return;
+        }
         self.send(PlayerEvent::Command(PlayerCommand::Previous));
     }
 
     fn next(&mut self) {
+        if self.should_throttle_skip() {
+            log::debug!("next skipped due to debounce");
+            return;
+        }
         self.send(PlayerEvent::Command(PlayerCommand::Next));
     }
 
@@ -627,6 +724,31 @@ where
         data: &AppState,
         env: &Env,
     ) {
+        // Process any OS media-control events routed through the controller.
+        if let Some(rx) = &self.media_control_rx {
+            loop {
+                match rx.try_recv() {
+                    Ok(event) => {
+                        // Throttle Next/Previous coming from OS media controls as well.
+                        let should_throttle = matches!(
+                            &event,
+                            PlayerEvent::Command(cmd) if matches!(cmd, PlayerCommand::Next | PlayerCommand::Previous)
+                        ) && self.should_throttle_skip();
+
+                        if should_throttle {
+                            log::debug!("media control next/previous skipped due to debounce");
+                        } else {
+                            self.send(event);
+                        }
+                    }
+                    Err(TryRecvError::Empty) => break,
+                    Err(e) => {
+                        log::error!("media control receive error: {e:?}");
+                        break;
+                    }
+                }
+            }
+        }
         if !old_data.playback.volume.same(&data.playback.volume) {
             self.set_volume(data.playback.volume);
         }
