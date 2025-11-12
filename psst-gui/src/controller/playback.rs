@@ -41,6 +41,7 @@ pub struct PlaybackController {
     has_scrobbled: bool,
     scrobbler: Option<Scrobbler>,
     startup: bool,
+    sender_disconnected: bool,
 }
 fn init_scrobbler_instance(data: &AppState) -> Option<Scrobbler> {
     if data.config.lastfm_enable {
@@ -78,6 +79,7 @@ impl PlaybackController {
             has_scrobbled: false,
             scrobbler: None,
             startup: true,
+            sender_disconnected: false,
         }
     }
 
@@ -116,41 +118,53 @@ impl PlaybackController {
             // Forward events that affect the UI state to the UI thread.
             match &event {
                 PlayerEvent::Loading { item } => {
-                    event_sink
-                        .submit_command(cmd::PLAYBACK_LOADING, item.item_id, widget_id)
-                        .unwrap();
+                    if let Err(e) =
+                        event_sink.submit_command(cmd::PLAYBACK_LOADING, item.item_id, widget_id)
+                    {
+                        log::error!("failed to submit PLAYBACK_LOADING command: {e:?}");
+                    }
                 }
                 PlayerEvent::Playing { path, position } => {
                     let progress = position.to_owned();
-                    event_sink
-                        .submit_command(cmd::PLAYBACK_PLAYING, (path.item_id, progress), widget_id)
-                        .unwrap();
+                    if let Err(e) = event_sink.submit_command(
+                        cmd::PLAYBACK_PLAYING,
+                        (path.item_id, progress),
+                        widget_id,
+                    ) {
+                        log::error!("failed to submit PLAYBACK_PLAYING command: {e:?}");
+                    }
                 }
                 PlayerEvent::Pausing { .. } => {
-                    event_sink
-                        .submit_command(cmd::PLAYBACK_PAUSING, (), widget_id)
-                        .unwrap();
+                    if let Err(e) = event_sink.submit_command(cmd::PLAYBACK_PAUSING, (), widget_id)
+                    {
+                        log::error!("failed to submit PLAYBACK_PAUSING command: {e:?}");
+                    }
                 }
                 PlayerEvent::Resuming { .. } => {
-                    event_sink
-                        .submit_command(cmd::PLAYBACK_RESUMING, (), widget_id)
-                        .unwrap();
+                    if let Err(e) = event_sink.submit_command(cmd::PLAYBACK_RESUMING, (), widget_id)
+                    {
+                        log::error!("failed to submit PLAYBACK_RESUMING command: {e:?}");
+                    }
                 }
                 PlayerEvent::Position { position, .. } => {
                     let progress = position.to_owned();
-                    event_sink
-                        .submit_command(cmd::PLAYBACK_PROGRESS, progress, widget_id)
-                        .unwrap();
+                    if let Err(e) =
+                        event_sink.submit_command(cmd::PLAYBACK_PROGRESS, progress, widget_id)
+                    {
+                        log::error!("failed to submit PLAYBACK_PROGRESS command: {e:?}");
+                    }
                 }
                 PlayerEvent::Blocked { .. } => {
-                    event_sink
-                        .submit_command(cmd::PLAYBACK_BLOCKED, (), widget_id)
-                        .unwrap();
+                    if let Err(e) = event_sink.submit_command(cmd::PLAYBACK_BLOCKED, (), widget_id)
+                    {
+                        log::error!("failed to submit PLAYBACK_BLOCKED command: {e:?}");
+                    }
                 }
                 PlayerEvent::Stopped => {
-                    event_sink
-                        .submit_command(cmd::PLAYBACK_STOPPED, (), widget_id)
-                        .unwrap();
+                    if let Err(e) = event_sink.submit_command(cmd::PLAYBACK_STOPPED, (), widget_id)
+                    {
+                        log::error!("failed to submit PLAYBACK_STOPPED command: {e:?}");
+                    }
                 }
                 _ => {}
             }
@@ -158,6 +172,7 @@ impl PlaybackController {
             // Let the player react to its internal events.
             player.handle(event);
         }
+        log::warn!("player event service loop has ended");
     }
 
     fn create_media_controls(
@@ -205,7 +220,9 @@ impl PlaybackController {
                 return;
             }
         };
-        sender.send(cmd).unwrap();
+        if let Err(e) = sender.send(cmd) {
+            log::error!("failed to send media control command to player: {e:?}");
+        }
     }
 
     fn update_media_control_playback(&mut self, playback: &Playback) {
@@ -256,9 +273,15 @@ impl PlaybackController {
 
     fn send(&mut self, event: PlayerEvent) {
         if let Some(s) = &self.sender {
-            s.send(event)
-                .map_err(|e| log::error!("error sending message: {e:?}"))
-                .ok();
+            if let Err(e) = s.send(event) {
+                if !self.sender_disconnected {
+                    log::error!("player thread has disconnected, commands will be ignored: {e:?}");
+                    log::error!(
+                        "this may be caused by rapid playback control inputs or an internal error"
+                    );
+                    self.sender_disconnected = true;
+                }
+            }
         }
     }
 
@@ -425,6 +448,12 @@ where
         match event {
             Event::Command(cmd) if cmd.is(cmd::SET_FOCUS) => {
                 ctx.request_focus();
+            }
+            Event::Command(cmd) if cmd.is(cmd::EQUALIZER_CONFIG_CHANGED) => {
+                self.send(PlayerEvent::Command(PlayerCommand::Configure {
+                    config: data.config.playback(),
+                }));
+                ctx.set_handled();
             }
             Event::Command(cmd) if cmd.is(cmd::PLAYBACK_LOADING) => {
                 let item = cmd.get_unchecked(cmd::PLAYBACK_LOADING);

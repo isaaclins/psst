@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use crossbeam_channel::Sender;
+use crossbeam_channel::{Receiver, Sender};
 use rb::{Consumer, Producer, RbConsumer, RbProducer, SpscRb, RB};
 use symphonia::core::{
     audio::{SampleBuffer, SignalSpec},
@@ -18,6 +18,7 @@ use crate::{
     actor::{Act, Actor, ActorHandle},
     audio::{
         decode::AudioDecoder,
+        equalizer::{Equalizer, EqualizerConfig},
         output::{AudioSink, DefaultAudioSink},
         resample::ResamplingQuality,
         source::{AudioSource, ResampledSource, StereoMappedSource},
@@ -33,7 +34,7 @@ use super::{
 pub struct PlaybackManager {
     sink: DefaultAudioSink,
     event_send: Sender<PlayerEvent>,
-    current: Option<(MediaPath, Sender<Msg>)>,
+    current: Option<(MediaPath, Sender<Msg>, Sender<EqualizerConfig>)>,
 }
 
 impl PlaybackManager {
@@ -47,13 +48,14 @@ impl PlaybackManager {
 
     pub fn play(&mut self, loaded: LoadedPlaybackItem) {
         let path = loaded.file.path();
-        let source = DecoderSource::new(
+        let (source, worker_sender, eq_sender) = DecoderSource::new(
             loaded.file,
             loaded.source,
             loaded.norm_factor,
+            loaded.equalizer_config,
             self.event_send.clone(),
         );
-        self.current = Some((path, source.actor.sender()));
+        self.current = Some((path, worker_sender, eq_sender));
         if source.sample_rate() == self.sink.sample_rate()
             && source.channel_count() == self.sink.channel_count()
         {
@@ -76,7 +78,7 @@ impl PlaybackManager {
     }
 
     pub fn seek(&self, position: Duration) {
-        if let Some((path, worker)) = &self.current {
+        if let Some((path, worker, _)) = &self.current {
             let _ = worker.send(Msg::Seek(position));
 
             // Because the position events are sent in the `DecoderSource`, doing this here
@@ -86,6 +88,14 @@ impl PlaybackManager {
                 path: path.to_owned(),
                 position,
             });
+        }
+    }
+
+    pub fn update_equalizer(&self, config: EqualizerConfig) {
+        if let Some((_, _, eq_sender)) = &self.current {
+            if let Err(err) = eq_sender.send(config) {
+                log::debug!("failed to send equalizer update to playback worker: {err}");
+            }
         }
     }
 }
@@ -101,23 +111,29 @@ pub struct DecoderSource {
     reported: u64,
     end_of_track: bool,
     norm_factor: f32,
+    equalizer: Equalizer,
+    equalizer_updates: Receiver<EqualizerConfig>,
     signal_spec: SignalSpec,
     time_base: TimeBase,
 }
 
 impl DecoderSource {
-    pub fn new(
+    fn new(
         file: MediaFile,
         decoder: AudioDecoder,
         norm_factor: f32,
+        equalizer_config: crate::audio::equalizer::EqualizerConfig,
         event_send: Sender<PlayerEvent>,
-    ) -> Self {
+    ) -> (Self, Sender<Msg>, Sender<EqualizerConfig>) {
         const REPORT_PRECISION: Duration = Duration::from_millis(900);
 
         // Gather the source signal parameters and compute how often we should report
         // the play-head position.
         let signal_spec = decoder.signal_spec();
-        let time_base = decoder.codec_params().time_base.unwrap();
+        let time_base = decoder.codec_params().time_base.unwrap_or_else(|| {
+            log::warn!("decoder missing time_base, using default");
+            TimeBase::new(1, signal_spec.rate)
+        });
         let precision = (signal_spec.rate as f64
             * signal_spec.channels.count() as f64
             * REPORT_PRECISION.as_secs_f64()) as u64;
@@ -146,20 +162,33 @@ impl DecoderSource {
         });
         let _ = actor.send(Msg::Read);
 
-        Self {
-            file,
-            actor,
-            consumer,
-            event_send,
-            norm_factor,
-            signal_spec,
-            time_base,
-            total_samples,
-            end_of_track: false,
-            position,
-            precision,
-            reported: u64::MAX, // Something sufficiently distinct from any position.
-        }
+        // Create the equalizer for this audio stream
+        let equalizer = Equalizer::new(equalizer_config, signal_spec.rate);
+
+        let (eq_send, eq_recv) = crossbeam_channel::unbounded();
+
+        let actor_sender = actor.sender();
+
+        (
+            Self {
+                file,
+                actor,
+                consumer,
+                event_send,
+                norm_factor,
+                equalizer,
+                equalizer_updates: eq_recv,
+                signal_spec,
+                time_base,
+                total_samples,
+                end_of_track: false,
+                position,
+                precision,
+                reported: u64::MAX, // Something sufficiently distinct from any position.
+            },
+            actor_sender,
+            eq_send,
+        )
     }
 
     fn written_samples(&self, position: u64) -> u64 {
@@ -182,12 +211,19 @@ impl AudioSource for DecoderSource {
         if self.end_of_track {
             return 0;
         }
+
+        while let Ok(config) = self.equalizer_updates.try_recv() {
+            self.equalizer.update_config(config);
+        }
         let written = self.consumer.read(output).unwrap_or(0);
 
         // Apply the normalization factor.
         output[..written]
             .iter_mut()
             .for_each(|s| *s *= self.norm_factor);
+
+        // Apply equalizer if enabled
+        self.equalizer.process(&mut output[..written]);
 
         let position = self.written_samples(written as u64);
         if self.should_report(position) {

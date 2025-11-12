@@ -14,6 +14,7 @@ fn deserialize_fails_for_truncated_message() {
     assert!(!encoded.is_empty(), "encoded message must contain bytes");
     encoded.pop();
 
-    let err = deserialize_protobuf::<ActivityPeriod>(&encoded).expect_err("truncated payload must fail");
+    let err =
+        deserialize_protobuf::<ActivityPeriod>(&encoded).expect_err("truncated payload must fail");
     assert!(matches!(err, Error::IoError(_)));
 }

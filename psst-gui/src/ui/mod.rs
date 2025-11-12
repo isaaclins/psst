@@ -325,7 +325,9 @@ fn main_panel_widget() -> impl Widget<AppState> {
                 // has a starting fixed width but the user can drag the divider to resize.
                 Split::columns(
                     Overlay::bottom(route_widget(), alert_widget()),
-                    lyrics::lyrics_widget().padding(theme::grid(1.0)).fix_width(420.0),
+                    lyrics::lyrics_widget()
+                        .padding(theme::grid(1.0))
+                        .fix_width(420.0),
                 )
                 .split_point(0.75)
                 .bar_size(6.0)
@@ -497,7 +499,7 @@ fn sidebar_menu_widget() -> impl Widget<AppState> {
     Flex::column()
         .with_default_spacer()
         .with_child(sidebar_link_widget("Home", Nav::Home))
-    .with_child(sidebar_link_widget("Favourites", Nav::SavedTracks))
+        .with_child(sidebar_link_widget("Favourites", Nav::SavedTracks))
         .with_child(sidebar_link_widget("Albums", Nav::SavedAlbums))
         .with_child(sidebar_link_widget("Podcasts", Nav::Shows))
         .with_child(search::input_widget().padding((theme::grid(1.0), theme::grid(1.0))))

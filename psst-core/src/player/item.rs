@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use crate::{
     audio::{
-        decode::AudioDecoder, decrypt::AudioKey, normalize::NormalizationLevel, probe::TrackProbe,
+        decode::AudioDecoder, decrypt::AudioKey, equalizer::EqualizerConfig,
+        normalize::NormalizationLevel, probe::TrackProbe,
     },
     cache::CacheHandle,
     cdn::CdnHandle,
@@ -22,6 +23,7 @@ pub struct LoadedPlaybackItem {
     pub file: MediaFile,
     pub source: AudioDecoder,
     pub norm_factor: f32,
+    pub equalizer_config: EqualizerConfig,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -57,6 +59,7 @@ impl PlaybackItem {
             file,
             source,
             norm_factor,
+            equalizer_config: config.equalizer.clone(),
         })
     }
 }
