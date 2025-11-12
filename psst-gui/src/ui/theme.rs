@@ -108,23 +108,33 @@ pub fn setup(env: &mut Env, state: &AppState) {
     env.set(BUTTON_BORDER_RADIUS, 4.0);
     env.set(BUTTON_BORDER_WIDTH, 1.0);
 
+    // Set fonts based on theme
+    let (font_family, font_size) = match state.config.theme {
+        Theme::Custom => {
+            let family = parse_font_family(&state.config.custom_theme.font_family);
+            let size = state.config.custom_theme.font_size.parse::<f64>().unwrap_or(13.0);
+            (family, size)
+        }
+        _ => (FontFamily::SYSTEM_UI, 13.0),
+    };
+
     env.set(
         UI_FONT,
-        FontDescriptor::new(FontFamily::SYSTEM_UI).with_size(13.0),
+        FontDescriptor::new(font_family.clone()).with_size(font_size),
     );
     env.set(
         UI_FONT_MEDIUM,
-        FontDescriptor::new(FontFamily::SYSTEM_UI)
-            .with_size(13.0)
+        FontDescriptor::new(font_family.clone())
+            .with_size(font_size)
             .with_weight(FontWeight::MEDIUM),
     );
     env.set(
         UI_FONT_MONO,
-        FontDescriptor::new(FontFamily::MONOSPACE).with_size(13.0),
+        FontDescriptor::new(FontFamily::MONOSPACE).with_size(font_size),
     );
-    env.set(TEXT_SIZE_SMALL, 11.0);
-    env.set(TEXT_SIZE_NORMAL, 13.0);
-    env.set(TEXT_SIZE_LARGE, 16.0);
+    env.set(TEXT_SIZE_SMALL, font_size - 2.0);
+    env.set(TEXT_SIZE_NORMAL, font_size);
+    env.set(TEXT_SIZE_LARGE, font_size + 3.0);
 
     env.set(BASIC_WIDGET_HEIGHT, 16.0);
     env.set(WIDE_WIDGET_WIDTH, grid(12.0));
@@ -223,4 +233,14 @@ fn setup_custom_theme(env: &mut Env, palette: &CustomTheme) {
     env.set(LINK_HOT_COLOR, accent.with_alpha(0.25));
     env.set(LINK_ACTIVE_COLOR, accent.with_alpha(0.15));
     env.set(LINK_COLD_COLOR, accent.with_alpha(0.0));
+}
+
+fn parse_font_family(family_name: &str) -> FontFamily {
+    match family_name.to_lowercase().as_str() {
+        "system ui" | "system-ui" => FontFamily::SYSTEM_UI,
+        "serif" => FontFamily::SERIF,
+        "sans-serif" => FontFamily::SANS_SERIF,
+        "monospace" | "mono" => FontFamily::MONOSPACE,
+        _ => FontFamily::new_unchecked(family_name),
+    }
 }
