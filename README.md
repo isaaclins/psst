@@ -165,6 +165,21 @@ Here's the basic project structure:
 - `/psst-gui` - GUI application built with [Druid](https://github.com/linebender/druid)
 - `/psst-cli` - Example CLI that plays a track. Credentials must be configured in the code.
 - `/psst-protocol` - Internal Protobuf definitions used for Spotify communication.
+- `/psst-e2e-tests` - End-to-end tests for application workflows and functionality.
+
+### Testing
+
+Run all tests including E2E tests:
+```bash
+cargo test --workspace --all-targets
+```
+
+Run only E2E tests:
+```bash
+cargo test -p psst-e2e-tests
+```
+
+For more information about E2E testing, see [docs/E2E_TESTING.md](docs/E2E_TESTING.md).
 
 ## Privacy Policy
 
