@@ -118,7 +118,7 @@ pub struct DecoderSource {
 }
 
 impl DecoderSource {
-    pub fn new(
+    fn new(
         file: MediaFile,
         decoder: AudioDecoder,
         norm_factor: f32,

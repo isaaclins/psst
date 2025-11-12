@@ -1,10 +1,6 @@
 use crate::data::{AlbumLink, PlaylistLink, Track};
 use druid::{Selector, WidgetId};
-use psst_core::{
-    audio::equalizer::{EqualizerConfig, EqualizerPreset},
-    item_id::ItemId,
-    player::item::PlaybackItem,
-};
+use psst_core::{audio::equalizer::EqualizerConfig, item_id::ItemId, player::item::PlaybackItem};
 use std::sync::Arc;
 use std::time::Duration;
 
