@@ -9,7 +9,10 @@ use std::{mem, thread, thread::JoinHandle, time::Duration};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 
 use crate::{
-    audio::output::{AudioOutput, AudioSink, DefaultAudioOutput, DefaultAudioSink},
+    audio::{
+        equalizer::EqualizerConfig,
+        output::{AudioOutput, AudioSink, DefaultAudioOutput, DefaultAudioSink},
+    },
     cache::CacheHandle,
     cdn::CdnHandle,
     error::Error,
@@ -30,6 +33,7 @@ const STOP_AFTER_CONSECUTIVE_LOADING_FAILURES: usize = 3;
 pub struct PlaybackConfig {
     pub bitrate: usize,
     pub pregain: f32,
+    pub equalizer: EqualizerConfig,
 }
 
 impl Default for PlaybackConfig {
@@ -37,6 +41,7 @@ impl Default for PlaybackConfig {
         Self {
             bitrate: 320,
             pregain: 3.0,
+            equalizer: EqualizerConfig::default(),
         }
     }
 }
@@ -159,7 +164,10 @@ impl Player {
             } if item == requested_item => match result {
                 Ok(loaded_item) => {
                     log::info!("preloaded audio file");
-                    self.preload = PreloadState::Preloaded { item, loaded_item };
+                    self.preload = PreloadState::Preloaded {
+                        item,
+                        loaded_item: Box::new(loaded_item),
+                    };
                 }
                 Err(err) => {
                     log::error!("failed to preload audio file, error while opening: {err}");
@@ -225,7 +233,7 @@ impl Player {
                 loaded_item,
             } if preloaded_item == item => {
                 // This item is already loaded in the preloader state.
-                self.play_loaded(loaded_item);
+                self.play_loaded(*loaded_item);
                 return;
             }
 
@@ -382,6 +390,7 @@ impl Player {
     }
 
     fn configure(&mut self, config: PlaybackConfig) {
+        self.playback_mgr.update_equalizer(config.equalizer.clone());
         self.config = config;
     }
 
@@ -512,7 +521,7 @@ enum PreloadState {
     },
     Preloaded {
         item: PlaybackItem,
-        loaded_item: LoadedPlaybackItem,
+        loaded_item: Box<LoadedPlaybackItem>,
     },
     None,
 }
