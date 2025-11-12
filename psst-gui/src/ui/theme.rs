@@ -112,7 +112,12 @@ pub fn setup(env: &mut Env, state: &AppState) {
     let (font_family, font_size) = match state.config.theme {
         Theme::Custom => {
             let family = parse_font_family(&state.config.custom_theme.font_family);
-            let size = state.config.custom_theme.font_size.parse::<f64>().unwrap_or(13.0);
+            let size = state
+                .config
+                .custom_theme
+                .font_size
+                .parse::<f64>()
+                .unwrap_or(13.0);
             (family, size)
         }
         _ => (FontFamily::SYSTEM_UI, 13.0),

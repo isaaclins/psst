@@ -457,7 +457,9 @@ where
     L: Lens<AppState, String> + 'static,
 {
     let description = match label_text {
-        "Font Family" => "Use 'System UI', 'Serif', 'Sans-Serif', 'Monospace', or any installed font name",
+        "Font Family" => {
+            "Use 'System UI', 'Serif', 'Sans-Serif', 'Monospace', or any installed font name"
+        }
         "Font Size" => "Recommended: 10.0 - 18.0",
         _ => "",
     };
@@ -482,11 +484,11 @@ where
 
 fn export_theme(ctx: &mut EventCtx, _data: &AppState) {
     use druid::FileDialogOptions;
-    
+
     let options = FileDialogOptions::new()
         .default_name("custom-theme.json")
         .allowed_types(vec![druid::FileSpec::new("JSON Theme File", &["json"])]);
-    
+
     ctx.submit_command(
         druid::commands::SHOW_SAVE_PANEL
             .with(options)
@@ -496,10 +498,10 @@ fn export_theme(ctx: &mut EventCtx, _data: &AppState) {
 
 fn import_theme(ctx: &mut EventCtx, _data: &AppState) {
     use druid::FileDialogOptions;
-    
+
     let options = FileDialogOptions::new()
         .allowed_types(vec![druid::FileSpec::new("JSON Theme File", &["json"])]);
-    
+
     ctx.submit_command(
         druid::commands::SHOW_OPEN_PANEL
             .with(options)

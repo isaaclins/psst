@@ -48,6 +48,9 @@ jobs:
       - name: Run Workspace Tests
         run: cargo test --workspace --all-targets
 
+      - name: Run E2E Tests
+        run: cargo test -p psst-e2e-tests
+
       - name: Run Documentation Tests
         run: cargo test --workspace --doc
 

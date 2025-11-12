@@ -380,7 +380,7 @@ impl CustomTheme {
     fn validate_hex_color(color: &str, field_name: &str) -> Result<(), String> {
         let trimmed = color.trim();
         let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
-        
+
         if hex.len() != 6 {
             return Err(format!(
                 "Invalid color for {}: '{}' (expected #RRGGBB format)",
