@@ -1153,13 +1153,83 @@ fn equalizer_tab_widget() -> impl Widget<AppState> {
         )
         .with_spacer(theme::grid(2.0));
 
-    // Add sliders for each band (we'll create a simplified version with fewer bands)
-    col = col.with_child(
-        Label::new("EQ band controls coming soon - use presets for now")
-            .with_text_color(theme::PLACEHOLDER_COLOR),
-    );
+    // Add sliders for each band
+    for band_index in 0..10 {
+        col = col.with_child(equalizer_band_slider(band_index));
+    }
 
     col
+}
+
+// Custom lens for accessing a specific equalizer band's gain
+// Druid's Slider uses f64, but our config uses f32, so we need to convert
+struct EqualizerBandLens {
+    index: usize,
+}
+
+impl Lens<AppState, f64> for EqualizerBandLens {
+    fn with<V, F: FnOnce(&f64) -> V>(&self, data: &AppState, f: F) -> V {
+        if self.index < data.config.equalizer.bands.len() {
+            let val = data.config.equalizer.bands[self.index].gain_db as f64;
+            f(&val)
+        } else {
+            f(&0.0)
+        }
+    }
+
+    fn with_mut<V, F: FnOnce(&mut f64) -> V>(&self, data: &mut AppState, f: F) -> V {
+        if self.index < data.config.equalizer.bands.len() {
+            let mut val = data.config.equalizer.bands[self.index].gain_db as f64;
+            let result = f(&mut val);
+            data.config.equalizer.bands[self.index].gain_db = val as f32;
+            result
+        } else {
+            let mut temp = 0.0;
+            f(&mut temp)
+        }
+    }
+}
+
+fn equalizer_band_slider(band_index: usize) -> impl Widget<AppState> {
+    Flex::row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .with_child(
+            Label::dynamic(move |data: &AppState, _| {
+                if band_index < data.config.equalizer.bands.len() {
+                    let freq = data.config.equalizer.bands[band_index].frequency;
+                    if freq >= 1000.0 {
+                        format!("{:.1} kHz", freq / 1000.0)
+                    } else {
+                        format!("{:.0} Hz", freq)
+                    }
+                } else {
+                    String::new()
+                }
+            })
+            .with_text_size(theme::TEXT_SIZE_SMALL)
+            .fix_width(theme::grid(7.0))
+            .align_right(),
+        )
+        .with_spacer(theme::grid(1.0))
+        .with_flex_child(
+            Slider::new()
+                .with_range(-12.0, 12.0)
+                .lens(EqualizerBandLens { index: band_index }),
+            1.0,
+        )
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::dynamic(move |data: &AppState, _| {
+                if band_index < data.config.equalizer.bands.len() {
+                    format!("{:+.1} dB", data.config.equalizer.bands[band_index].gain_db)
+                } else {
+                    String::new()
+                }
+            })
+            .with_text_size(theme::TEXT_SIZE_SMALL)
+            .fix_width(theme::grid(7.0)),
+        )
+        .padding((0.0, theme::grid(0.3), 0.0, 0.0))
 }
 
 fn about_tab_widget() -> impl Widget<AppState> {
