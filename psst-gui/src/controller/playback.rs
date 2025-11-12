@@ -418,8 +418,14 @@ impl PlaybackController {
                                 }
                             }
                         }
-                        if !state_parts.is_empty() {
-                            activity = activity.state(&state_parts.join(" • "));
+                        let state_string = if state_parts.is_empty() {
+                            None
+                        } else {
+                            Some(state_parts.join(" • "))
+                        };
+
+                        if let Some(state) = state_string.as_deref() {
+                            activity = activity.state(state);
                         }
 
                         // Set timestamps based on privacy settings
