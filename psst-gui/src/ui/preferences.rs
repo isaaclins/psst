@@ -16,7 +16,7 @@ use druid::{
     text::ParseFormatter,
     widget::{
         Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking, MainAxisAlignment,
-        Painter, RadioGroup, SizedBox, Slider, TextBox, ViewSwitcher,
+        Painter, RadioGroup, Scroll, SizedBox, Slider, TextBox, ViewSwitcher,
     },
     Color, Data, Env, Event, EventCtx, Insets, Lens, LensExt, LifeCycle, LifeCycleCtx,
     RenderContext, Selector, Target, Widget, WidgetExt,
@@ -82,8 +82,9 @@ pub fn preferences_widget() -> impl Widget<AppState> {
         .must_fill_main_axis(true)
         .cross_axis_alignment(CrossAxisAlignment::Fill)
         .with_child(
-            tabs_widget()
-                .padding(theme::grid(2.0))
+            Scroll::new(tabs_widget().padding(theme::grid(2.0)))
+                .horizontal()
+                .content_must_fill(false)
                 .background(theme::BACKGROUND_LIGHT),
         )
         .with_child(
