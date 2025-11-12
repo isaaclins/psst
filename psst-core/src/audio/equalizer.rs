@@ -12,10 +12,7 @@ pub struct EqualizerBand {
 
 impl EqualizerBand {
     pub fn new(frequency: f32, gain_db: f32) -> Self {
-        Self {
-            frequency,
-            gain_db,
-        }
+        Self { frequency, gain_db }
     }
 }
 
@@ -234,7 +231,7 @@ impl BiquadCoefficients {
         let omega = 2.0 * PI * frequency / sample_rate as f32;
         let cos_omega = omega.cos();
         let sin_omega = omega.sin();
-        
+
         // Q factor for peaking filter (controls bandwidth)
         let q = 1.0;
         let alpha = sin_omega / (2.0 * q);
@@ -278,7 +275,8 @@ impl BiquadState {
 
     fn process(&mut self, input: f32, coeff: &BiquadCoefficients) -> f32 {
         let output = coeff.b0 * input + coeff.b1 * self.x1 + coeff.b2 * self.x2
-            - coeff.a1 * self.y1 - coeff.a2 * self.y2;
+            - coeff.a1 * self.y1
+            - coeff.a2 * self.y2;
 
         self.x2 = self.x1;
         self.x1 = input;
@@ -304,7 +302,7 @@ impl Equalizer {
     pub fn new(config: EqualizerConfig, sample_rate: u32) -> Self {
         let coefficients = Self::calculate_coefficients(&config.bands, sample_rate);
         let num_bands = config.bands.len();
-        
+
         Self {
             config,
             sample_rate,
@@ -314,7 +312,10 @@ impl Equalizer {
         }
     }
 
-    fn calculate_coefficients(bands: &[EqualizerBand], sample_rate: u32) -> Vec<BiquadCoefficients> {
+    fn calculate_coefficients(
+        bands: &[EqualizerBand],
+        sample_rate: u32,
+    ) -> Vec<BiquadCoefficients> {
         bands
             .iter()
             .map(|band| BiquadCoefficients::peaking_eq(band.frequency, band.gain_db, sample_rate))
@@ -324,14 +325,14 @@ impl Equalizer {
     /// Update the equalizer configuration
     pub fn update_config(&mut self, config: EqualizerConfig) {
         self.coefficients = Self::calculate_coefficients(&config.bands, self.sample_rate);
-        
+
         // Reset filter state when config changes significantly
         let num_bands = config.bands.len();
         if num_bands != self.states_left.len() {
             self.states_left = vec![BiquadState::new(); num_bands];
             self.states_right = vec![BiquadState::new(); num_bands];
         }
-        
+
         self.config = config;
     }
 
@@ -398,7 +399,7 @@ mod tests {
     fn test_preset_creation() {
         let presets = EqualizerPreset::built_in_presets();
         assert!(!presets.is_empty());
-        
+
         let bass_boost = EqualizerPreset::bass_boost();
         assert_eq!(bass_boost.name, "Bass Boost");
         assert_eq!(bass_boost.bands.len(), 10);
@@ -408,12 +409,12 @@ mod tests {
     fn test_equalizer_process_when_disabled() {
         let config = EqualizerConfig::default();
         let mut eq = Equalizer::new(config, 44100);
-        
+
         let mut samples = vec![0.5, -0.5, 0.3, -0.3];
         let original = samples.clone();
-        
+
         eq.process(&mut samples);
-        
+
         // When disabled, samples should not change
         assert_eq!(samples, original);
     }
@@ -425,12 +426,12 @@ mod tests {
             ..Default::default()
         };
         config.bands[0].gain_db = 6.0; // Boost bass
-        
+
         let mut eq = Equalizer::new(config, 44100);
-        
+
         let mut samples = vec![0.5, -0.5, 0.3, -0.3];
         eq.process(&mut samples);
-        
+
         // Samples should be modified when enabled
         // (exact values depend on filter implementation, just checking it changed)
     }
@@ -439,15 +440,15 @@ mod tests {
     fn test_equalizer_update_config() {
         let config = EqualizerConfig::default();
         let mut eq = Equalizer::new(config, 44100);
-        
+
         let mut new_config = EqualizerConfig {
             enabled: true,
             ..Default::default()
         };
         new_config.bands[0].gain_db = 10.0;
-        
+
         eq.update_config(new_config.clone());
-        
+
         assert!(eq.config().enabled);
         assert_eq!(eq.config().bands[0].gain_db, 10.0);
     }

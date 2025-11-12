@@ -164,9 +164,9 @@ impl Player {
             } if item == requested_item => match result {
                 Ok(loaded_item) => {
                     log::info!("preloaded audio file");
-                    self.preload = PreloadState::Preloaded { 
-                        item, 
-                        loaded_item: Box::new(loaded_item)
+                    self.preload = PreloadState::Preloaded {
+                        item,
+                        loaded_item: Box::new(loaded_item),
                     };
                 }
                 Err(err) => {
@@ -390,6 +390,7 @@ impl Player {
     }
 
     fn configure(&mut self, config: PlaybackConfig) {
+        self.playback_mgr.update_equalizer(config.equalizer.clone());
         self.config = config;
     }
 

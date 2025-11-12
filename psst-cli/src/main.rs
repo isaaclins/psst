@@ -21,10 +21,10 @@ fn main() {
     let track_id = args
         .get(1)
         .expect("Expected <track_id> in the first parameter");
-    
+
     // Optional: Get equalizer preset from command line (2nd argument)
     let eq_preset_name = args.get(2).map(|s| s.as_str());
-    
+
     let login_creds = Credentials::from_username_and_password(
         env::var("SPOTIFY_USERNAME").unwrap(),
         env::var("SPOTIFY_PASSWORD").unwrap(),
@@ -37,27 +37,39 @@ fn main() {
     start(track_id, session, eq_preset_name).unwrap();
 }
 
-fn start(track_id: &str, session: SessionService, eq_preset_name: Option<&str>) -> Result<(), Error> {
+fn start(
+    track_id: &str,
+    session: SessionService,
+    eq_preset_name: Option<&str>,
+) -> Result<(), Error> {
     let cdn = Cdn::new(session.clone(), None)?;
     let cache = Cache::new(PathBuf::from("cache"))?;
     let item_id = ItemId::from_base62(track_id, ItemIdType::Track).unwrap();
-    
+
     // Configure equalizer based on preset name
     let mut equalizer = EqualizerConfig::default();
     if let Some(preset_name) = eq_preset_name {
         let presets = EqualizerPreset::built_in_presets();
-        if let Some(preset) = presets.iter().find(|p| p.name.eq_ignore_ascii_case(preset_name)) {
+        if let Some(preset) = presets
+            .iter()
+            .find(|p| p.name.eq_ignore_ascii_case(preset_name))
+        {
             equalizer.bands = preset.bands.clone();
             equalizer.enabled = true;
             log::info!("Using equalizer preset: {}", preset.name);
         } else {
-            log::warn!("Unknown preset '{}', available presets: {}", 
+            log::warn!(
+                "Unknown preset '{}', available presets: {}",
                 preset_name,
-                presets.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", ")
+                presets
+                    .iter()
+                    .map(|p| p.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
         }
     }
-    
+
     play_item(
         session,
         cdn,
