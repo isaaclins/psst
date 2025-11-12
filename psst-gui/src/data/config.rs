@@ -147,6 +147,16 @@ pub struct Config {
     #[data(ignore)]
     #[serde(default)]
     pub custom_equalizer_presets: Vec<EqualizerPreset>,
+    #[serde(default)]
+    pub enable_discord_presence: bool,
+    #[serde(default)]
+    pub discord_app_id: String,
+    #[serde(default)]
+    pub presence_show_artist: bool,
+    #[serde(default)]
+    pub presence_show_album: bool,
+    #[serde(default)]
+    pub presence_show_track_duration: bool,
 }
 
 impl Default for Config {
@@ -176,6 +186,11 @@ impl Default for Config {
             sidebar_visible: true,
             equalizer: Default::default(),
             custom_equalizer_presets: Vec::new(),
+            enable_discord_presence: false,
+            discord_app_id: String::new(),
+            presence_show_artist: true,
+            presence_show_album: true,
+            presence_show_track_duration: true,
         }
     }
 }

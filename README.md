@@ -166,6 +166,18 @@ Here's the basic project structure:
 - `/psst-cli` - Example CLI that plays a track. Credentials must be configured in the code.
 - `/psst-protocol` - Internal Protobuf definitions used for Spotify communication.
 
+### Testing
+
+The project has a comprehensive test suite with 70+ tests covering unit tests, integration tests, edge cases, and error handling. To run the tests:
+
+```bash
+./scripts/run-tests.sh
+```
+
+This will run clippy, all workspace tests, and documentation tests with strict warnings enabled.
+
+For more information about testing practices and writing tests, see [TESTING.md](TESTING.md).
+
 ## Privacy Policy
 
 Psst connects only to the official Spotify servers and does not call home.
