@@ -19,7 +19,7 @@ use druid::{
         Painter, RadioGroup, SizedBox, Slider, TextBox, ViewSwitcher,
     },
     Color, Data, Env, Event, EventCtx, Insets, Lens, LensExt, LifeCycle, LifeCycleCtx,
-    RenderContext, Selector, Widget, WidgetExt,
+    RenderContext, Selector, Target, Widget, WidgetExt,
 };
 use psst_core::{connection::Credentials, lastfm, oauth, session::SessionConfig};
 
@@ -1079,7 +1079,7 @@ fn cache_tab_widget() -> impl Widget<AppState> {
 
 fn equalizer_tab_widget() -> impl Widget<AppState> {
     use psst_core::audio::equalizer::EqualizerPreset;
-    
+
     let mut col = Flex::column()
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .must_fill_main_axis(true);
@@ -1088,10 +1088,7 @@ fn equalizer_tab_widget() -> impl Widget<AppState> {
     col = col
         .with_child(Label::new("Equalizer").with_font(theme::UI_FONT_MEDIUM))
         .with_spacer(theme::grid(2.0))
-        .with_child(
-            Label::new("Enable Equalizer")
-                .with_text_color(theme::PLACEHOLDER_COLOR),
-        )
+        .with_child(Label::new("Enable Equalizer").with_text_color(theme::PLACEHOLDER_COLOR))
         .with_spacer(theme::grid(1.0))
         .with_child(
             Button::new(|data: &AppState, _: &_| {
@@ -1123,7 +1120,7 @@ fn equalizer_tab_widget() -> impl Widget<AppState> {
     // Add buttons for each preset
     let presets = EqualizerPreset::built_in_presets();
     let mut preset_row = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
-    
+
     for (i, preset) in presets.iter().enumerate() {
         let preset_clone = preset.clone();
         preset_row = preset_row.with_child(
@@ -1132,7 +1129,7 @@ fn equalizer_tab_widget() -> impl Widget<AppState> {
                     data.config.equalizer.bands = preset_clone.bands.clone();
                     data.config.save();
                 })
-                .padding((theme::grid(0.5), theme::grid(0.5)))
+                .padding((theme::grid(0.5), theme::grid(0.5))),
         );
         if i < presets.len() - 1 {
             preset_row = preset_row.with_spacer(theme::grid(1.0));
@@ -1158,7 +1155,40 @@ fn equalizer_tab_widget() -> impl Widget<AppState> {
         col = col.with_child(equalizer_band_slider(band_index));
     }
 
-    col
+    col.controller(EqualizerConfigNotifier)
+}
+
+struct EqualizerConfigNotifier;
+
+impl<W> Controller<AppState, W> for EqualizerConfigNotifier
+where
+    W: Widget<AppState>,
+{
+    fn event(
+        &mut self,
+        child: &mut W,
+        ctx: &mut EventCtx,
+        event: &Event,
+        data: &mut AppState,
+        env: &Env,
+    ) {
+        if let Event::Command(command) = event {
+            if command.is(cmd::EQUALIZER_CONFIG_CHANGED) {
+                child.event(ctx, event, data, env);
+                return;
+            }
+        }
+
+        let before = data.config.equalizer.clone();
+        child.event(ctx, event, data, env);
+        if before != data.config.equalizer {
+            ctx.submit_command(
+                cmd::EQUALIZER_CONFIG_CHANGED
+                    .with(data.config.equalizer.clone())
+                    .to(Target::Global),
+            );
+        }
+    }
 }
 
 // Custom lens for accessing a specific equalizer band's gain

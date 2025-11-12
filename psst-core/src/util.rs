@@ -155,8 +155,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::SeekFrom;
+    use super::*;
     use crate::protocol::metadata::ActivityPeriod;
     use std::io::{self, Seek};
 
@@ -204,8 +204,8 @@ mod tests {
 
     #[test]
     fn offset_file_seek_saturates_when_underflowing() {
-        let mut file = OffsetFile::new(UnderflowingSeek::default(), 10)
-            .expect("initial seek must succeed");
+        let mut file =
+            OffsetFile::new(UnderflowingSeek::default(), 10).expect("initial seek must succeed");
 
         let forward = file
             .seek(SeekFrom::Start(7))

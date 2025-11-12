@@ -1,6 +1,10 @@
 use crate::data::{AlbumLink, PlaylistLink, Track};
 use druid::{Selector, WidgetId};
-use psst_core::{item_id::ItemId, player::item::PlaybackItem};
+use psst_core::{
+    audio::equalizer::{EqualizerConfig, EqualizerPreset},
+    item_id::ItemId,
+    player::item::PlaybackItem,
+};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -47,6 +51,9 @@ pub const PLAYBACK_RESUMING: Selector = Selector::new("app.playback-resuming");
 pub const PLAYBACK_BLOCKED: Selector = Selector::new("app.playback-blocked");
 pub const PLAYBACK_STOPPED: Selector = Selector::new("app.playback-stopped");
 
+// Equalizer
+pub const EQUALIZER_CONFIG_CHANGED: Selector<EqualizerConfig> =
+    Selector::new("app.equalizer-config-changed");
 // Playback control
 pub const PLAY: Selector<usize> = Selector::new("app.play-index");
 pub const PLAY_TRACKS: Selector<PlaybackPayload> = Selector::new("app.play-tracks");
