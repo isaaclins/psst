@@ -51,6 +51,7 @@ pub enum PreferencesTab {
     Appearance,
     Equalizer,
     Account,
+    Privacy,
     Cache,
     About,
 }
@@ -141,6 +142,16 @@ pub struct Config {
     pub lastfm_enable: bool,
     #[serde(default = "default_sidebar_visible")]
     pub sidebar_visible: bool,
+    #[serde(default)]
+    pub enable_discord_presence: bool,
+    #[serde(default)]
+    pub discord_app_id: String,
+    #[serde(default)]
+    pub presence_show_artist: bool,
+    #[serde(default)]
+    pub presence_show_album: bool,
+    #[serde(default)]
+    pub presence_show_track_duration: bool,
     #[data(ignore)]
     #[serde(default)]
     pub equalizer: EqualizerConfig,
@@ -174,6 +185,11 @@ impl Default for Config {
             lastfm_api_secret: None,
             lastfm_enable: false,
             sidebar_visible: true,
+            enable_discord_presence: false,
+            discord_app_id: String::new(),
+            presence_show_artist: true,
+            presence_show_album: true,
+            presence_show_track_duration: true,
             equalizer: Default::default(),
             custom_equalizer_presets: Vec::new(),
         }

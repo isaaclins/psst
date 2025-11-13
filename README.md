@@ -181,6 +181,18 @@ cargo test -p psst-e2e-tests
 
 For more information about E2E testing, see [docs/E2E_TESTING.md](docs/E2E_TESTING.md).
 
+### Testing
+
+The project has a comprehensive test suite with 70+ tests covering unit tests, integration tests, edge cases, and error handling. To run the tests:
+
+```bash
+./scripts/run-tests.sh
+```
+
+This will run clippy, all workspace tests, and documentation tests with strict warnings enabled.
+
+For more information about testing practices and writing tests, see [TESTING.md](TESTING.md).
+
 ## Privacy Policy
 
 Psst connects only to the official Spotify servers and does not call home.
