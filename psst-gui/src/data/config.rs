@@ -306,6 +306,18 @@ pub struct CustomTheme {
     pub primary_text: String,
     pub accent: String,
     pub highlight: String,
+    #[serde(default = "default_font_family")]
+    pub font_family: String,
+    #[serde(default = "default_font_size")]
+    pub font_size: String,
+}
+
+fn default_font_family() -> String {
+    "System UI".into()
+}
+
+fn default_font_size() -> String {
+    "13.0".into()
 }
 
 impl Default for CustomTheme {
@@ -316,7 +328,74 @@ impl Default for CustomTheme {
             primary_text: "#f2f2f2".into(),
             accent: "#1db954".into(),
             highlight: "#3a7bd5".into(),
+            font_family: default_font_family(),
+            font_size: default_font_size(),
         }
+    }
+}
+
+impl CustomTheme {
+    pub fn to_json(&self) -> Result<String, String> {
+        serde_json::to_string_pretty(self).map_err(|e| e.to_string())
+    }
+
+    pub fn from_json(json: &str) -> Result<Self, String> {
+        let theme: Self = serde_json::from_str(json).map_err(|e| e.to_string())?;
+        theme.validate()?;
+        Ok(theme)
+    }
+
+    pub fn export_to_file(&self, path: &Path) -> Result<(), String> {
+        let json = self.to_json()?;
+        fs::write(path, json).map_err(|e| e.to_string())
+    }
+
+    pub fn import_from_file(path: &Path) -> Result<Self, String> {
+        let json = fs::read_to_string(path).map_err(|e| e.to_string())?;
+        Self::from_json(&json)
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        // Validate colors are valid hex codes
+        Self::validate_hex_color(&self.background, "background")?;
+        Self::validate_hex_color(&self.surface, "surface")?;
+        Self::validate_hex_color(&self.primary_text, "primary_text")?;
+        Self::validate_hex_color(&self.accent, "accent")?;
+        Self::validate_hex_color(&self.highlight, "highlight")?;
+
+        // Validate font size is a valid number
+        if self.font_size.parse::<f64>().is_err() {
+            return Err(format!("Invalid font size: {}", self.font_size));
+        }
+
+        // Validate font size is reasonable (between 8 and 32)
+        let size = self.font_size.parse::<f64>().unwrap();
+        if !(8.0..=32.0).contains(&size) {
+            return Err(format!("Font size must be between 8 and 32, got {}", size));
+        }
+
+        Ok(())
+    }
+
+    fn validate_hex_color(color: &str, field_name: &str) -> Result<(), String> {
+        let trimmed = color.trim();
+        let hex = trimmed.strip_prefix('#').unwrap_or(trimmed);
+
+        if hex.len() != 6 {
+            return Err(format!(
+                "Invalid color for {}: '{}' (expected #RRGGBB format)",
+                field_name, color
+            ));
+        }
+
+        if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err(format!(
+                "Invalid hex color for {}: '{}' (must contain only 0-9, A-F)",
+                field_name, color
+            ));
+        }
+
+        Ok(())
     }
 }
 
@@ -355,4 +434,88 @@ fn get_dir_size(path: &Path) -> Option<u64> {
         };
         Some(acc + size)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_custom_theme_serialization() {
+        let theme = CustomTheme::default();
+        let json = theme.to_json().unwrap();
+        let parsed = CustomTheme::from_json(&json).unwrap();
+        assert_eq!(theme, parsed);
+    }
+
+    #[test]
+    fn test_custom_theme_validation_valid() {
+        let theme = CustomTheme {
+            background: "#1c1c1f".into(),
+            surface: "#242429".into(),
+            primary_text: "#f2f2f2".into(),
+            accent: "#1db954".into(),
+            highlight: "#3a7bd5".into(),
+            font_family: "System UI".into(),
+            font_size: "13.0".into(),
+        };
+        assert!(theme.validate().is_ok());
+    }
+
+    #[test]
+    fn test_custom_theme_validation_invalid_color() {
+        let json = r##"{
+            "background": "invalid",
+            "surface": "#242429",
+            "primary_text": "#f2f2f2",
+            "accent": "#1db954",
+            "highlight": "#3a7bd5",
+            "font_family": "System UI",
+            "font_size": "13.0"
+        }"##;
+        assert!(CustomTheme::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_custom_theme_validation_invalid_font_size() {
+        let json = r##"{
+            "background": "#1c1c1f",
+            "surface": "#242429",
+            "primary_text": "#f2f2f2",
+            "accent": "#1db954",
+            "highlight": "#3a7bd5",
+            "font_family": "System UI",
+            "font_size": "invalid"
+        }"##;
+        assert!(CustomTheme::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_custom_theme_validation_font_size_out_of_range() {
+        let json = r##"{
+            "background": "#1c1c1f",
+            "surface": "#242429",
+            "primary_text": "#f2f2f2",
+            "accent": "#1db954",
+            "highlight": "#3a7bd5",
+            "font_family": "System UI",
+            "font_size": "50.0"
+        }"##;
+        assert!(CustomTheme::from_json(json).is_err());
+    }
+
+    #[test]
+    fn test_custom_theme_backwards_compatibility() {
+        // Test that old themes without font fields can still be loaded
+        let json = r##"{
+            "background": "#1c1c1f",
+            "surface": "#242429",
+            "primary_text": "#f2f2f2",
+            "accent": "#1db954",
+            "highlight": "#3a7bd5"
+        }"##;
+        let theme = CustomTheme::from_json(json).unwrap();
+        assert_eq!(theme.font_family, "System UI");
+        assert_eq!(theme.font_size, "13.0");
+    }
 }

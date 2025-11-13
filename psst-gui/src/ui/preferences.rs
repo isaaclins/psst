@@ -393,7 +393,120 @@ fn custom_theme_editor() -> impl Widget<AppState> {
                 .then(CustomTheme::highlight),
         ));
 
+    // Typography section
+    col = col
+        .with_spacer(theme::grid(3.0))
+        .with_child(Label::new("Typography").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Customize fonts (requires restart to take full effect).")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0))
+        .with_child(typography_row(
+            "Font Family",
+            "System UI",
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::font_family),
+        ))
+        .with_child(typography_row(
+            "Font Size",
+            "13.0",
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::font_size),
+        ));
+
+    // Export/Import section
+    col = col
+        .with_spacer(theme::grid(3.0))
+        .with_child(Label::new("Import/Export").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Save your custom theme or load a theme file.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Flex::row()
+                .with_child(
+                    Button::new("Export Theme").on_click(|ctx, data: &mut AppState, _| {
+                        export_theme(ctx, data);
+                    }),
+                )
+                .with_spacer(theme::grid(1.0))
+                .with_child(
+                    Button::new("Import Theme").on_click(|ctx, data: &mut AppState, _| {
+                        import_theme(ctx, data);
+                    }),
+                ),
+        );
+
     col
+}
+
+fn typography_row<L>(
+    label_text: &'static str,
+    placeholder_text: &'static str,
+    lens: L,
+) -> impl Widget<AppState>
+where
+    L: Lens<AppState, String> + 'static,
+{
+    let description = match label_text {
+        "Font Family" => {
+            "Use 'System UI', 'Serif', 'Sans-Serif', 'Monospace', or any installed font name"
+        }
+        "Font Size" => "Recommended: 10.0 - 18.0",
+        _ => "",
+    };
+
+    Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .with_child(Label::new(label_text).with_font(theme::UI_FONT_MEDIUM))
+        .with_child(
+            Label::new(description)
+                .with_text_size(theme::TEXT_SIZE_SMALL)
+                .with_text_color(theme::PLACEHOLDER_COLOR),
+        )
+        .with_spacer(theme::grid(0.5))
+        .with_child(
+            TextBox::new()
+                .with_placeholder(placeholder_text)
+                .fix_width(theme::grid(30.0))
+                .lens(lens),
+        )
+        .with_spacer(theme::grid(1.5))
+}
+
+fn export_theme(ctx: &mut EventCtx, _data: &AppState) {
+    use druid::FileDialogOptions;
+
+    let options = FileDialogOptions::new()
+        .default_name("custom-theme.json")
+        .allowed_types(vec![druid::FileSpec::new("JSON Theme File", &["json"])]);
+
+    ctx.submit_command(
+        druid::commands::SHOW_SAVE_PANEL
+            .with(options)
+            .to(druid::Target::Auto),
+    );
+}
+
+fn import_theme(ctx: &mut EventCtx, _data: &AppState) {
+    use druid::FileDialogOptions;
+
+    let options = FileDialogOptions::new()
+        .allowed_types(vec![druid::FileSpec::new("JSON Theme File", &["json"])]);
+
+    ctx.submit_command(
+        druid::commands::SHOW_OPEN_PANEL
+            .with(options)
+            .to(druid::Target::Auto),
+    );
 }
 
 fn custom_color_row<L>(
