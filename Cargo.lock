@@ -3906,6 +3906,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "psst-e2e-tests"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "psst-gui"
 version = "0.1.0"
 dependencies = [

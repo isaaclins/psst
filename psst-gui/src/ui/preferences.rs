@@ -16,10 +16,10 @@ use druid::{
     text::ParseFormatter,
     widget::{
         Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking, MainAxisAlignment,
-        Painter, RadioGroup, SizedBox, Slider, TextBox, ViewSwitcher,
+        Painter, RadioGroup, Scroll, SizedBox, Slider, TextBox, ViewSwitcher,
     },
     Color, Data, Env, Event, EventCtx, Insets, Lens, LensExt, LifeCycle, LifeCycleCtx,
-    RenderContext, Selector, Widget, WidgetExt,
+    RenderContext, Selector, Target, Widget, WidgetExt,
 };
 use psst_core::{connection::Credentials, lastfm, oauth, session::SessionConfig};
 
@@ -82,8 +82,9 @@ pub fn preferences_widget() -> impl Widget<AppState> {
         .must_fill_main_axis(true)
         .cross_axis_alignment(CrossAxisAlignment::Fill)
         .with_child(
-            tabs_widget()
-                .padding(theme::grid(2.0))
+            Scroll::new(tabs_widget().padding(theme::grid(2.0)))
+                .horizontal()
+                .content_must_fill(false)
                 .background(theme::BACKGROUND_LIGHT),
         )
         .with_child(
@@ -92,6 +93,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                 |active, _, _| match active {
                     PreferencesTab::General => general_tab_widget().boxed(),
                     PreferencesTab::Appearance => appearance_tab_widget().boxed(),
+                    PreferencesTab::Equalizer => equalizer_tab_widget().boxed(),
                     PreferencesTab::Account => {
                         account_tab_widget(AccountTab::InPreferences).boxed()
                     }
@@ -150,6 +152,12 @@ fn tabs_widget() -> impl Widget<AppState> {
             "Appearance",
             &icons::PLAYLIST,
             PreferencesTab::Appearance,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Equalizer",
+            &icons::MUSIC_NOTE,
+            PreferencesTab::Equalizer,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -392,7 +400,120 @@ fn custom_theme_editor() -> impl Widget<AppState> {
                 .then(CustomTheme::highlight),
         ));
 
+    // Typography section
+    col = col
+        .with_spacer(theme::grid(3.0))
+        .with_child(Label::new("Typography").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Customize fonts (requires restart to take full effect).")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0))
+        .with_child(typography_row(
+            "Font Family",
+            "System UI",
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::font_family),
+        ))
+        .with_child(typography_row(
+            "Font Size",
+            "13.0",
+            AppState::config
+                .then(Config::custom_theme)
+                .then(CustomTheme::font_size),
+        ));
+
+    // Export/Import section
+    col = col
+        .with_spacer(theme::grid(3.0))
+        .with_child(Label::new("Import/Export").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Save your custom theme or load a theme file.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Flex::row()
+                .with_child(
+                    Button::new("Export Theme").on_click(|ctx, data: &mut AppState, _| {
+                        export_theme(ctx, data);
+                    }),
+                )
+                .with_spacer(theme::grid(1.0))
+                .with_child(
+                    Button::new("Import Theme").on_click(|ctx, data: &mut AppState, _| {
+                        import_theme(ctx, data);
+                    }),
+                ),
+        );
+
     col
+}
+
+fn typography_row<L>(
+    label_text: &'static str,
+    placeholder_text: &'static str,
+    lens: L,
+) -> impl Widget<AppState>
+where
+    L: Lens<AppState, String> + 'static,
+{
+    let description = match label_text {
+        "Font Family" => {
+            "Use 'System UI', 'Serif', 'Sans-Serif', 'Monospace', or any installed font name"
+        }
+        "Font Size" => "Recommended: 10.0 - 18.0",
+        _ => "",
+    };
+
+    Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .with_child(Label::new(label_text).with_font(theme::UI_FONT_MEDIUM))
+        .with_child(
+            Label::new(description)
+                .with_text_size(theme::TEXT_SIZE_SMALL)
+                .with_text_color(theme::PLACEHOLDER_COLOR),
+        )
+        .with_spacer(theme::grid(0.5))
+        .with_child(
+            TextBox::new()
+                .with_placeholder(placeholder_text)
+                .fix_width(theme::grid(30.0))
+                .lens(lens),
+        )
+        .with_spacer(theme::grid(1.5))
+}
+
+fn export_theme(ctx: &mut EventCtx, _data: &AppState) {
+    use druid::FileDialogOptions;
+
+    let options = FileDialogOptions::new()
+        .default_name("custom-theme.json")
+        .allowed_types(vec![druid::FileSpec::new("JSON Theme File", &["json"])]);
+
+    ctx.submit_command(
+        druid::commands::SHOW_SAVE_PANEL
+            .with(options)
+            .to(druid::Target::Auto),
+    );
+}
+
+fn import_theme(ctx: &mut EventCtx, _data: &AppState) {
+    use druid::FileDialogOptions;
+
+    let options = FileDialogOptions::new()
+        .allowed_types(vec![druid::FileSpec::new("JSON Theme File", &["json"])]);
+
+    ctx.submit_command(
+        druid::commands::SHOW_OPEN_PANEL
+            .with(options)
+            .to(druid::Target::Auto),
+    );
 }
 
 fn custom_color_row<L>(
@@ -1151,6 +1272,191 @@ fn cache_tab_widget() -> impl Widget<AppState> {
 
     col.controller(CacheController::new())
         .lens(AppState::preferences)
+}
+
+fn equalizer_tab_widget() -> impl Widget<AppState> {
+    use psst_core::audio::equalizer::EqualizerPreset;
+
+    let mut col = Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true);
+
+    // Enable/Disable toggle
+    col = col
+        .with_child(Label::new("Equalizer").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(Label::new("Enable Equalizer").with_text_color(theme::PLACEHOLDER_COLOR))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Button::new(|data: &AppState, _: &_| {
+                if data.config.equalizer.enabled {
+                    "Disable Equalizer".to_string()
+                } else {
+                    "Enable Equalizer".to_string()
+                }
+            })
+            .on_click(|_ctx, data: &mut AppState, _| {
+                data.config.equalizer.enabled = !data.config.equalizer.enabled;
+                data.config.save();
+            }),
+        );
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    // Preset selector
+    col = col
+        .with_child(Label::new("Presets").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Choose a preset or customize your own equalizer curve below.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0));
+
+    // Add buttons for each preset
+    let presets = EqualizerPreset::built_in_presets();
+    let mut preset_row = Flex::row().cross_axis_alignment(CrossAxisAlignment::Start);
+
+    for (i, preset) in presets.iter().enumerate() {
+        let preset_clone = preset.clone();
+        preset_row = preset_row.with_child(
+            Button::new(preset.name.clone())
+                .on_click(move |_ctx, data: &mut AppState, _| {
+                    data.config.equalizer.bands = preset_clone.bands.clone();
+                    data.config.save();
+                })
+                .padding((theme::grid(0.5), theme::grid(0.5))),
+        );
+        if i < presets.len() - 1 {
+            preset_row = preset_row.with_spacer(theme::grid(1.0));
+        }
+    }
+    col = col.with_child(preset_row);
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    // Custom EQ bands
+    col = col
+        .with_child(Label::new("Custom Equalizer").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Adjust individual frequency bands (in dB, -12 to +12).")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(2.0));
+
+    // Add sliders for each band
+    for band_index in 0..10 {
+        col = col.with_child(equalizer_band_slider(band_index));
+    }
+
+    col.controller(EqualizerConfigNotifier)
+}
+
+struct EqualizerConfigNotifier;
+
+impl<W> Controller<AppState, W> for EqualizerConfigNotifier
+where
+    W: Widget<AppState>,
+{
+    fn event(
+        &mut self,
+        child: &mut W,
+        ctx: &mut EventCtx,
+        event: &Event,
+        data: &mut AppState,
+        env: &Env,
+    ) {
+        if let Event::Command(command) = event {
+            if command.is(cmd::EQUALIZER_CONFIG_CHANGED) {
+                child.event(ctx, event, data, env);
+                return;
+            }
+        }
+
+        let before = data.config.equalizer.clone();
+        child.event(ctx, event, data, env);
+        if before != data.config.equalizer {
+            ctx.submit_command(
+                cmd::EQUALIZER_CONFIG_CHANGED
+                    .with(data.config.equalizer.clone())
+                    .to(Target::Global),
+            );
+        }
+    }
+}
+
+// Custom lens for accessing a specific equalizer band's gain
+// Druid's Slider uses f64, but our config uses f32, so we need to convert
+struct EqualizerBandLens {
+    index: usize,
+}
+
+impl Lens<AppState, f64> for EqualizerBandLens {
+    fn with<V, F: FnOnce(&f64) -> V>(&self, data: &AppState, f: F) -> V {
+        if self.index < data.config.equalizer.bands.len() {
+            let val = data.config.equalizer.bands[self.index].gain_db as f64;
+            f(&val)
+        } else {
+            f(&0.0)
+        }
+    }
+
+    fn with_mut<V, F: FnOnce(&mut f64) -> V>(&self, data: &mut AppState, f: F) -> V {
+        if self.index < data.config.equalizer.bands.len() {
+            let mut val = data.config.equalizer.bands[self.index].gain_db as f64;
+            let result = f(&mut val);
+            data.config.equalizer.bands[self.index].gain_db = val as f32;
+            result
+        } else {
+            let mut temp = 0.0;
+            f(&mut temp)
+        }
+    }
+}
+
+fn equalizer_band_slider(band_index: usize) -> impl Widget<AppState> {
+    Flex::row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .with_child(
+            Label::dynamic(move |data: &AppState, _| {
+                if band_index < data.config.equalizer.bands.len() {
+                    let freq = data.config.equalizer.bands[band_index].frequency;
+                    if freq >= 1000.0 {
+                        format!("{:.1} kHz", freq / 1000.0)
+                    } else {
+                        format!("{:.0} Hz", freq)
+                    }
+                } else {
+                    String::new()
+                }
+            })
+            .with_text_size(theme::TEXT_SIZE_SMALL)
+            .fix_width(theme::grid(7.0))
+            .align_right(),
+        )
+        .with_spacer(theme::grid(1.0))
+        .with_flex_child(
+            Slider::new()
+                .with_range(-12.0, 12.0)
+                .lens(EqualizerBandLens { index: band_index }),
+            1.0,
+        )
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::dynamic(move |data: &AppState, _| {
+                if band_index < data.config.equalizer.bands.len() {
+                    format!("{:+.1} dB", data.config.equalizer.bands[band_index].gain_db)
+                } else {
+                    String::new()
+                }
+            })
+            .with_text_size(theme::TEXT_SIZE_SMALL)
+            .fix_width(theme::grid(7.0)),
+        )
+        .padding((0.0, theme::grid(0.3), 0.0, 0.0))
 }
 
 fn about_tab_widget() -> impl Widget<AppState> {

@@ -48,6 +48,9 @@ jobs:
       - name: Run Test Suite
         run: ./scripts/run-tests.sh
 
+      - name: Run E2E Tests
+        run: cargo test -p psst-e2e-tests
+
   build:
     needs: [code-style, tests]
     if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/dev') }}
