@@ -13,12 +13,15 @@ use crate::ui::theme;
 use crate::ui::DOWNLOAD_ARTWORK;
 use crate::{
     cmd,
-    data::{AppState, Config},
+    data::{AppState, Config, UpdateInfo},
     token_utils::TokenUtils,
     ui,
     webapi::WebApi,
     widget::remote_image,
 };
+use druid::Selector;
+
+const UPDATE_CHECK_RESULT: Selector<Option<UpdateInfo>> = Selector::new("app.update-check-result");
 
 enum OpenDialogKind {
     ThemeImport,
@@ -267,6 +270,46 @@ impl AppDelegate<AppState> for Delegate {
                     }
                 }
             }
+            Handled::Yes
+        } else if cmd.is(cmd::CHECK_FOR_UPDATES) {
+            // Handle update checking in background thread
+            let event_sink = ctx.get_external_handle();
+            std::thread::spawn(move || {
+                match crate::data::UpdateInfo::check_for_updates() {
+                    Ok(update_info) => {
+                        event_sink
+                            .submit_command(
+                                UPDATE_CHECK_RESULT,
+                                update_info,
+                                Target::Global,
+                            )
+                            .ok();
+                    }
+                    Err(e) => {
+                        log::error!("Failed to check for updates: {}", e);
+                        event_sink
+                            .submit_command(
+                                UPDATE_CHECK_RESULT,
+                                None,
+                                Target::Global,
+                            )
+                            .ok();
+                    }
+                }
+            });
+            Handled::Yes
+        } else if let Some(update_info) = cmd.get(UPDATE_CHECK_RESULT) {
+            data.preferences.checking_update = false;
+            // Only show update if it hasn't been dismissed
+            if let Some(ref info) = update_info {
+                if !data.config.update_preferences.is_version_dismissed(&info.version) {
+                    data.preferences.available_update = update_info.clone();
+                }
+            } else {
+                data.preferences.available_update = None;
+            }
+            // Mark as checked
+            data.config.update_preferences.mark_checked();
             Handled::Yes
         } else {
             Handled::No

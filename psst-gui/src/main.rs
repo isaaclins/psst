@@ -102,6 +102,15 @@ fn main() {
 
     WebApi::global().set_event_sink(launcher.get_external_handle());
 
+    // Check for updates on startup if enabled
+    if state.config.update_preferences.should_check_for_updates() {
+        log::info!("Checking for updates on startup");
+        launcher
+            .get_external_handle()
+            .submit_command(cmd::CHECK_FOR_UPDATES, (), druid::Target::Global)
+            .ok();
+    }
+
     launcher
         .delegate(delegate)
         .launch(state)
