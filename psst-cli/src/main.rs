@@ -12,43 +12,58 @@ use psst_core::{
     player::{item::PlaybackItem, PlaybackConfig, Player, PlayerCommand, PlayerEvent},
     session::{SessionConfig, SessionService},
 };
-use std::{env, io, io::BufRead, path::PathBuf, thread};
+use std::{env, fmt, io, io::BufRead, path::PathBuf, thread};
+
+const TEST_MODE_ENV: &str = "PSST_CLI_TEST_MODE";
 
 fn main() {
     env_logger::init();
 
-    let args: Vec<String> = env::args().collect();
+    if let Err(err) = run() {
+        eprintln!("{err}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), CliError> {
+    let mut args = env::args();
+    let _binary = args.next();
+
     let track_id = args
-        .get(1)
-        .expect("Expected <track_id> in the first parameter");
+        .next()
+        .ok_or(CliError::MissingTrackId)?;
+    let eq_preset_name = args.next();
 
-    // Optional: Get equalizer preset from command line (2nd argument)
-    let eq_preset_name = args.get(2).map(|s| s.as_str());
+    let username = env::var("SPOTIFY_USERNAME").map_err(|_| CliError::MissingUsername)?;
+    let password = env::var("SPOTIFY_PASSWORD").map_err(|_| CliError::MissingPassword)?;
 
-    let login_creds = Credentials::from_username_and_password(
-        env::var("SPOTIFY_USERNAME").unwrap(),
-        env::var("SPOTIFY_PASSWORD").unwrap(),
-    );
+    let item_id = ItemId::from_base62(&track_id, ItemIdType::Track)
+        .ok_or_else(|| CliError::InvalidTrackId(track_id.clone()))?;
+
+    let equalizer = configure_equalizer(eq_preset_name.as_deref());
+    let login_creds = Credentials::from_username_and_password(username, password);
+
     let session = SessionService::with_config(SessionConfig {
         login_creds,
         proxy_url: None,
     });
 
-    start(track_id, session, eq_preset_name).unwrap();
+    if env::var_os(TEST_MODE_ENV).is_some() {
+        return Ok(());
+    }
+
+    let playback_item = PlaybackItem {
+        item_id,
+        norm_level: NormalizationLevel::Track,
+    };
+
+    start(playback_item, session, equalizer).map_err(CliError::Core)
 }
 
-fn start(
-    track_id: &str,
-    session: SessionService,
-    eq_preset_name: Option<&str>,
-) -> Result<(), Error> {
-    let cdn = Cdn::new(session.clone(), None)?;
-    let cache = Cache::new(PathBuf::from("cache"))?;
-    let item_id = ItemId::from_base62(track_id, ItemIdType::Track).unwrap();
-
-    // Configure equalizer based on preset name
+fn configure_equalizer(preset: Option<&str>) -> EqualizerConfig {
     let mut equalizer = EqualizerConfig::default();
-    if let Some(preset_name) = eq_preset_name {
+
+    if let Some(preset_name) = preset {
         let presets = EqualizerPreset::built_in_presets();
         if let Some(preset) = presets
             .iter()
@@ -70,16 +85,18 @@ fn start(
         }
     }
 
-    play_item(
-        session,
-        cdn,
-        cache,
-        PlaybackItem {
-            item_id,
-            norm_level: NormalizationLevel::Track,
-        },
-        equalizer,
-    )
+    equalizer
+}
+
+fn start(
+    playback_item: PlaybackItem,
+    session: SessionService,
+    equalizer: EqualizerConfig,
+) -> Result<(), Error> {
+    let cdn = Cdn::new(session.clone(), None)?;
+    let cache = Cache::new(PathBuf::from("cache"))?;
+
+    play_item(session, cdn, cache, playback_item, equalizer)
 }
 
 fn play_item(
@@ -147,4 +164,40 @@ fn play_item(
     output.sink().close();
 
     Ok(())
+}
+
+#[derive(Debug)]
+enum CliError {
+    MissingTrackId,
+    MissingUsername,
+    MissingPassword,
+    InvalidTrackId(String),
+    Core(Error),
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CliError::MissingTrackId => write!(f, "Expected <track_id> in the first parameter"),
+            CliError::MissingUsername => {
+                write!(f, "Environment variable SPOTIFY_USERNAME is required")
+            }
+            CliError::MissingPassword => {
+                write!(f, "Environment variable SPOTIFY_PASSWORD is required")
+            }
+            CliError::InvalidTrackId(track) => {
+                write!(f, "Invalid Spotify track id: '{track}'")
+            }
+            CliError::Core(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for CliError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            CliError::Core(err) => Some(err),
+            _ => None,
+        }
+    }
 }

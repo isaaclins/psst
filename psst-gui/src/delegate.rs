@@ -20,6 +20,10 @@ use crate::{
     widget::remote_image,
 };
 
+enum OpenDialogKind {
+    ThemeImport,
+}
+
 pub struct Delegate {
     main_window: Option<WindowId>,
     preferences_window: Option<WindowId>,
@@ -27,6 +31,7 @@ pub struct Delegate {
     artwork_window: Option<WindowId>,
     image_pool: ThreadPool,
     size_updated: bool,
+    pending_open_dialog: Option<OpenDialogKind>,
 }
 
 impl Delegate {
@@ -40,6 +45,7 @@ impl Delegate {
             artwork_window: None,
             image_pool: ThreadPool::with_name("image_loading".into(), MAX_IMAGE_THREADS),
             size_updated: false,
+            pending_open_dialog: None,
         }
     }
 
@@ -163,6 +169,9 @@ impl AppDelegate<AppState> for Delegate {
         } else if cmd.is(cmd::CLOSE_ALL_WINDOWS) {
             self.close_all_windows(ctx);
             Handled::Yes
+        } else if cmd.is(cmd::BEGIN_THEME_IMPORT) {
+            self.pending_open_dialog = Some(OpenDialogKind::ThemeImport);
+            Handled::Yes
         } else if cmd.is(commands::CLOSE_WINDOW) {
             if let Some(window_id) = self.preferences_window {
                 if target == Target::Window(window_id) {
@@ -238,16 +247,24 @@ impl AppDelegate<AppState> for Delegate {
             }
             Handled::Yes
         } else if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
-            // Handle theme import
-            match crate::data::CustomTheme::import_from_file(file_info.path()) {
-                Ok(theme) => {
-                    data.config.custom_theme = theme;
-                    data.config.theme = crate::data::Theme::Custom;
-                    data.config.save();
-                    data.info_alert("Theme imported successfully");
-                }
-                Err(e) => {
-                    data.error_alert(format!("Failed to import theme: {}", e));
+            let context = self
+                .pending_open_dialog
+                .take()
+                .unwrap_or(OpenDialogKind::ThemeImport);
+
+            match context {
+                OpenDialogKind::ThemeImport => {
+                    match crate::data::CustomTheme::import_from_file(file_info.path()) {
+                        Ok(theme) => {
+                            data.config.custom_theme = theme;
+                            data.config.theme = crate::data::Theme::Custom;
+                            data.config.save();
+                            data.info_alert("Theme imported successfully");
+                        }
+                        Err(e) => {
+                            data.error_alert(format!("Failed to import theme: {}", e));
+                        }
+                    }
                 }
             }
             Handled::Yes

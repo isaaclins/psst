@@ -36,6 +36,7 @@ impl LocalItemRegistry {
         registry.path_to_id.get(&path).copied().unwrap_or_else(|| {
             let id = registry.next_id;
             registry.next_id += 1;
+            registry.path_to_id.insert(path.clone(), id);
             registry.id_to_path.insert(id, path.clone());
             id
         })
