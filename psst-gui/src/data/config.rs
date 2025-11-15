@@ -152,6 +152,8 @@ pub struct Config {
     pub presence_show_album: bool,
     #[serde(default)]
     pub presence_show_track_duration: bool,
+    #[serde(default)]
+    pub presence_dynamic_cover: bool,
     #[data(ignore)]
     #[serde(default)]
     pub equalizer: EqualizerConfig,
@@ -190,6 +192,7 @@ impl Default for Config {
             presence_show_artist: true,
             presence_show_album: true,
             presence_show_track_duration: true,
+            presence_dynamic_cover: false,
             equalizer: Default::default(),
             custom_equalizer_presets: Vec::new(),
         }

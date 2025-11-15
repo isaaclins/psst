@@ -509,6 +509,7 @@ fn import_theme(ctx: &mut EventCtx, _data: &AppState) {
     let options = FileDialogOptions::new()
         .allowed_types(vec![druid::FileSpec::new("JSON Theme File", &["json"])]);
 
+    ctx.submit_command(cmd::BEGIN_THEME_IMPORT);
     ctx.submit_command(
         druid::commands::SHOW_OPEN_PANEL
             .with(options)
@@ -1181,10 +1182,7 @@ fn privacy_tab_widget() -> impl Widget<AppState> {
 
     // Discord App ID input
     col = col
-        .with_child(
-            Label::new("Discord Application ID:")
-                .with_text_size(theme::TEXT_SIZE_SMALL),
-        )
+        .with_child(Label::new("Discord Application ID:").with_text_size(theme::TEXT_SIZE_SMALL))
         .with_spacer(theme::grid(0.5))
         .with_child(
             TextBox::new()
@@ -1194,10 +1192,12 @@ fn privacy_tab_widget() -> impl Widget<AppState> {
         )
         .with_spacer(theme::grid(0.5))
         .with_child(
-            Label::new("Register an application at discord.com/developers to get an Application ID")
-                .with_text_color(theme::PLACEHOLDER_COLOR)
-                .with_text_size(theme::TEXT_SIZE_SMALL)
-                .with_line_break_mode(LineBreaking::WordWrap),
+            Label::new(
+                "Register an application at discord.com/developers to get an Application ID",
+            )
+            .with_text_color(theme::PLACEHOLDER_COLOR)
+            .with_text_size(theme::TEXT_SIZE_SMALL)
+            .with_line_break_mode(LineBreaking::WordWrap),
         );
 
     col = col.with_spacer(theme::grid(3.0));
@@ -1227,6 +1227,28 @@ fn privacy_tab_widget() -> impl Widget<AppState> {
         .with_child(
             Checkbox::new("Show track duration")
                 .lens(AppState::config.then(Config::presence_show_track_duration)),
+        );
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    col = col
+        .with_child(Label::new("Artwork Options").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("Control whether Discord Rich Presence shows the current album art.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(1.5))
+        .with_child(
+            Checkbox::new("Use dynamic album art")
+                .lens(AppState::config.then(Config::presence_dynamic_cover)),
+        )
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Label::new("When disabled, Discord Rich Presence falls back to the default Psst icon.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
         );
 
     col

@@ -4,6 +4,10 @@ use std::{
 };
 
 use crossbeam_channel::Sender;
+use discord_rich_presence::{
+    activity::{Activity, Assets, Timestamps},
+    DiscordIpc, DiscordIpcClient,
+};
 use druid::{
     im::Vector,
     widget::{prelude::*, Controller},
@@ -22,10 +26,6 @@ use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
-use discord_rich_presence::{
-    activity::{Activity, Assets, Timestamps},
-    DiscordIpc, DiscordIpcClient,
-};
 
 use crate::{
     cmd,
@@ -47,6 +47,7 @@ pub struct PlaybackController {
     discord_client: Option<DiscordIpcClient>,
     startup: bool,
     sender_disconnected: bool,
+    dynamic_cover_warning_logged: bool,
 }
 fn init_scrobbler_instance(data: &AppState) -> Option<Scrobbler> {
     if data.config.lastfm_enable {
@@ -87,18 +88,16 @@ fn init_discord_client(config: &Config) -> Option<DiscordIpcClient> {
     }
 
     match DiscordIpcClient::new(app_id) {
-        Ok(mut client) => {
-            match client.connect() {
-                Ok(()) => {
-                    log::info!("Discord Rich Presence connected successfully");
-                    Some(client)
-                }
-                Err(e) => {
-                    log::warn!("Failed to connect to Discord Rich Presence: {}", e);
-                    None
-                }
+        Ok(mut client) => match client.connect() {
+            Ok(()) => {
+                log::info!("Discord Rich Presence connected successfully");
+                Some(client)
             }
-        }
+            Err(e) => {
+                log::warn!("Failed to connect to Discord Rich Presence: {}", e);
+                None
+            }
+        },
         Err(e) => {
             log::warn!("Failed to create Discord IPC client: {}", e);
             None
@@ -118,6 +117,7 @@ impl PlaybackController {
             discord_client: None,
             startup: true,
             sender_disconnected: false,
+            dynamic_cover_warning_logged: false,
         }
     }
 
@@ -389,87 +389,128 @@ impl PlaybackController {
     }
 
     fn update_discord_presence(&mut self, playback: &Playback, config: &Config) {
-        if let Some(client) = &mut self.discord_client {
-            match playback.state {
-                PlaybackState::Playing => {
-                    if let Some(now_playing) = &playback.now_playing {
-                        let mut activity = Activity::new();
+        let Some(mut client) = self.discord_client.take() else {
+            return;
+        };
 
-                        // Set details (track name is always shown)
-                        activity = activity.details(now_playing.item.name().as_ref());
+        let (result, action) = match playback.state {
+            PlaybackState::Playing => {
+                if let Some(now_playing) = &playback.now_playing {
+                    let mut activity = Activity::new();
+                    activity = activity.details(now_playing.item.name().as_ref());
 
-                        // Set state (artist and/or album for tracks, show name for episodes)
-                        let mut state_parts = Vec::new();
-                        match &now_playing.item {
-                            Playable::Track(track) => {
-                                if config.presence_show_artist {
-                                    state_parts.push(track.artist_name().to_string());
-                                }
-                                if config.presence_show_album {
-                                    if let Some(album) = &track.album {
-                                        state_parts.push(album.name.to_string());
-                                    }
-                                }
+                    let mut state_parts = Vec::new();
+                    match &now_playing.item {
+                        Playable::Track(track) => {
+                            if config.presence_show_artist {
+                                state_parts.push(track.artist_name().to_string());
                             }
-                            Playable::Episode(episode) => {
-                                // For episodes, show the podcast name
-                                if config.presence_show_artist {
-                                    state_parts.push(episode.show.name.to_string());
+                            if config.presence_show_album {
+                                if let Some(album) = &track.album {
+                                    state_parts.push(album.name.to_string());
                                 }
                             }
                         }
-                        let state_string = if state_parts.is_empty() {
-                            None
-                        } else {
-                            Some(state_parts.join(" • "))
-                        };
-
-                        if let Some(state) = state_string.as_deref() {
-                            activity = activity.state(state);
+                        Playable::Episode(episode) => {
+                            if config.presence_show_artist {
+                                state_parts.push(episode.show.name.to_string());
+                            }
                         }
+                    }
 
-                        // Set timestamps based on privacy settings
-                        if config.presence_show_track_duration {
-                            let now = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs() as i64;
+                    let state_string = if state_parts.is_empty() {
+                        None
+                    } else {
+                        Some(state_parts.join(" • "))
+                    };
+
+                    if let Some(state) = state_string.as_deref() {
+                        activity = activity.state(state);
+                    }
+
+                    if config.presence_show_track_duration {
+                        if let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) {
                             let elapsed = now_playing.progress.as_secs() as i64;
                             let duration = now_playing.item.duration().as_secs() as i64;
-                            let start_time = now - elapsed;
+                            let start_time = now.as_secs() as i64 - elapsed;
                             let end_time = start_time + duration;
-
-                            activity = activity.timestamps(
-                                Timestamps::new()
-                                    .start(start_time)
-                                    .end(end_time)
-                            );
-                        }
-
-                        // Set large image (album/episode art) using the current item cover when available.
-                        let mut assets = Assets::new().large_text("Psst - Fast Spotify Client");
-                        if let Some((cover_url, _)) = now_playing.cover_image_metadata() {
-                            assets = assets.large_image(cover_url);
-                        } else {
-                            assets = assets.large_image("psst_logo");
-                        }
-
-                        activity = activity.assets(assets);
-
-                        if let Err(e) = client.set_activity(activity) {
-                            log::warn!("Failed to update Discord Rich Presence: {}", e);
+                            activity = activity
+                                .timestamps(Timestamps::new().start(start_time).end(end_time));
                         }
                     }
+
+                    let image_choice = self.prepare_discord_large_image(now_playing, config);
+                    let mut owned_image: Option<String> = None;
+                    let image_ref = match image_choice {
+                        DiscordImageKey::Borrowed(key) => key,
+                        DiscordImageKey::Owned(key) => {
+                            owned_image = Some(key);
+                            owned_image.as_deref().unwrap()
+                        }
+                    };
+
+                    let assets = Assets::new()
+                        .large_text("Psst - Fast Spotify Client")
+                        .large_image(image_ref);
+
+                    activity = activity.assets(assets);
+
+                    let result = client.set_activity(activity);
+                    drop(owned_image);
+
+                    (result, "update Discord Rich Presence")
+                } else {
+                    (Ok(()), "update Discord Rich Presence")
                 }
-                PlaybackState::Paused | PlaybackState::Stopped => {
-                    // Clear the presence when paused or stopped
-                    if let Err(e) = client.clear_activity() {
-                        log::warn!("Failed to clear Discord Rich Presence: {}", e);
-                    }
-                }
-                _ => {}
+            }
+            PlaybackState::Paused | PlaybackState::Stopped => {
+                (client.clear_activity(), "clear Discord Rich Presence")
+            }
+            _ => (Ok(()), "update Discord Rich Presence"),
+        };
+
+        let mut reconnect_needed = false;
+
+        if let Err(err) = result {
+            log::warn!("Failed to {}: {}", action, err);
+            if err.to_string().contains("Broken pipe") {
+                reconnect_needed = true;
             }
         }
+
+        if reconnect_needed {
+            let _ = client.close();
+            self.discord_client = init_discord_client(config);
+        } else {
+            self.discord_client = Some(client);
+        }
+    }
+
+    fn prepare_discord_large_image<'a>(
+        &'a mut self,
+        now_playing: &NowPlaying,
+        config: &'a Config,
+    ) -> DiscordImageKey<'a> {
+        if config.presence_dynamic_cover {
+            if let Some((cover_url, _)) = now_playing.cover_image_metadata() {
+                if let Some(key) = clean_discord_image_source(cover_url) {
+                    return DiscordImageKey::Owned(key);
+                }
+                if !self.dynamic_cover_warning_logged {
+                    log::debug!(
+                        "Dynamic cover '{cover_url}' exceeds Discord's 256-character asset limit; using default asset."
+                    );
+                    self.dynamic_cover_warning_logged = true;
+                }
+            } else if !self.dynamic_cover_warning_logged {
+                log::debug!(
+                    "No cover metadata available for dynamic Discord image; using default asset."
+                );
+                self.dynamic_cover_warning_logged = true;
+            }
+        }
+
+        DiscordImageKey::Borrowed("psst_logo")
     }
 
     fn play(&mut self, items: &Vector<QueueEntry>, position: usize) {
@@ -810,7 +851,8 @@ where
         }
 
         // Reinitialize Discord client if presence settings changed
-        let discord_changed = old_data.config.enable_discord_presence != data.config.enable_discord_presence
+        let discord_changed = old_data.config.enable_discord_presence
+            != data.config.enable_discord_presence
             || old_data.config.discord_app_id != data.config.discord_app_id;
 
         if discord_changed {
@@ -823,17 +865,26 @@ where
         }
 
         // Update presence if privacy settings changed
-        let privacy_changed = old_data.config.presence_show_artist != data.config.presence_show_artist
+        let privacy_changed = old_data.config.presence_show_artist
+            != data.config.presence_show_artist
             || old_data.config.presence_show_album != data.config.presence_show_album
-            || old_data.config.presence_show_track_duration != data.config.presence_show_track_duration;
+            || old_data.config.presence_show_track_duration
+                != data.config.presence_show_track_duration
+            || old_data.config.presence_dynamic_cover != data.config.presence_dynamic_cover;
 
         if privacy_changed {
+            self.dynamic_cover_warning_logged = false;
             self.update_discord_presence(&data.playback, &data.config);
             self.update_media_control_metadata(&data.playback, &data.config);
         }
 
         child.update(ctx, old_data, data, env);
     }
+}
+
+enum DiscordImageKey<'a> {
+    Borrowed(&'a str),
+    Owned(String),
 }
 
 // This uses the current system time to generate a random lowercase string of a given length.
@@ -854,4 +905,12 @@ fn random_lowercase_string(len: usize) -> String {
         chars.push('a');
     }
     chars.into_iter().rev().collect()
+}
+
+fn clean_discord_image_source(source: &str) -> Option<String> {
+    let trimmed = source.trim();
+    if trimmed.is_empty() || trimmed.len() > 256 {
+        return None;
+    }
+    Some(trimmed.to_string())
 }

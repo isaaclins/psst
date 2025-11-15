@@ -3917,6 +3917,7 @@ dependencies = [
 name = "psst-gui"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "crossbeam-channel",
  "directories",
  "discord-rich-presence",

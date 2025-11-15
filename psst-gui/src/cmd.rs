@@ -22,6 +22,7 @@ pub const COPY: Selector<String> = Selector::new("app.copy-to-clipboard");
 pub const GO_TO_URL: Selector<String> = Selector::new("app.go-to-url");
 pub const OAUTH_TOKENS_REFRESHED: Selector<(String, Option<String>)> =
     Selector::new("app.oauth-tokens-refreshed");
+pub const BEGIN_THEME_IMPORT: Selector = Selector::new("app.begin-theme-import");
 
 // Find
 pub const TOGGLE_FINDER: Selector = Selector::new("app.show-finder");

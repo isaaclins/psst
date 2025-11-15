@@ -182,7 +182,7 @@ fn item_id_local_file_roundtrip() {
     let path = PathBuf::from("/tmp/test_audio.mp3");
     let id = ItemId::from_local(path.clone());
     assert_eq!(id.id_type, ItemIdType::LocalFile);
-    
+
     let recovered_path = id.to_local();
     assert_eq!(recovered_path, path);
 }
@@ -191,10 +191,10 @@ fn item_id_local_file_roundtrip() {
 fn item_id_local_file_same_path_same_id() {
     // Use a unique path for this test to avoid interference from other tests
     let unique_path = PathBuf::from("/tmp/test_same_unique_xyz123.mp3");
-    
+
     let id1 = ItemId::from_local(unique_path.clone());
     let id2 = ItemId::from_local(unique_path);
-    
+
     assert_eq!(id1.id, id2.id);
 }
 
@@ -202,10 +202,10 @@ fn item_id_local_file_same_path_same_id() {
 fn item_id_local_file_different_paths_different_ids() {
     let path1 = PathBuf::from("/tmp/test_different1.mp3");
     let path2 = PathBuf::from("/tmp/test_different2.mp3");
-    
+
     let id1 = ItemId::from_local(path1);
     let id2 = ItemId::from_local(path2);
-    
+
     assert_ne!(id1.id, id2.id);
 }
 
@@ -282,7 +282,7 @@ fn item_id_types_equality() {
     let id1 = ItemId::new(123, ItemIdType::Track);
     let id2 = ItemId::new(123, ItemIdType::Track);
     let id3 = ItemId::new(123, ItemIdType::Podcast);
-    
+
     assert_eq!(id1, id2);
     assert_ne!(id1, id3);
 }
