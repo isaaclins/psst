@@ -300,7 +300,14 @@ impl AppDelegate<AppState> for Delegate {
             Handled::Yes
         } else if let Some(update_info) = cmd.get(UPDATE_CHECK_RESULT) {
             data.preferences.checking_update = false;
-            data.preferences.available_update = update_info.clone();
+            // Only show update if it hasn't been dismissed
+            if let Some(ref info) = update_info {
+                if !data.config.update_preferences.is_version_dismissed(&info.version) {
+                    data.preferences.available_update = update_info.clone();
+                }
+            } else {
+                data.preferences.available_update = None;
+            }
             // Mark as checked
             data.config.update_preferences.mark_checked();
             Handled::Yes

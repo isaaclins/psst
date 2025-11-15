@@ -1,8 +1,6 @@
 use druid::{Data, Lens};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use ureq;
 
 const GITHUB_API_URL: &str = "https://api.github.com/repos/isaaclins/psst/releases/latest";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
