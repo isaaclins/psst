@@ -446,12 +446,15 @@ impl PlaybackController {
                             );
                         }
 
-                        // Set large image (album/episode art)
-                        activity = activity.assets(
-                            Assets::new()
-                                .large_image("psst_logo")
-                                .large_text("Psst - Fast Spotify Client")
-                        );
+                        // Set large image (album/episode art) using the current item cover when available.
+                        let mut assets = Assets::new().large_text("Psst - Fast Spotify Client");
+                        if let Some((cover_url, _)) = now_playing.cover_image_metadata() {
+                            assets = assets.large_image(cover_url);
+                        } else {
+                            assets = assets.large_image("psst_logo");
+                        }
+
+                        activity = activity.assets(assets);
 
                         if let Err(e) = client.set_activity(activity) {
                             log::warn!("Failed to update Discord Rich Presence: {}", e);
