@@ -3940,6 +3940,7 @@ dependencies = [
  "regex",
  "rustfm-scrobble",
  "sanitize_html",
+ "semver 1.0.26",
  "serde",
  "serde_json",
  "souvlaki",

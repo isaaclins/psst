@@ -1498,7 +1498,7 @@ fn updates_tab_widget() -> impl Widget<AppState> {
         .with_spacer(theme::grid(2.0))
         .with_child(Label::new(format!(
             "Current Version: {}",
-            env!("CARGO_PKG_VERSION")
+            psst_core::BUILD_VERSION
         )))
         .with_spacer(theme::grid(1.0))
         .with_child(

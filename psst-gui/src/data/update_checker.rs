@@ -1,4 +1,5 @@
 use druid::{Data, Lens};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -13,7 +14,7 @@ use std::process::Command;
 use url::Url;
 
 const GITHUB_API_URL: &str = "https://api.github.com/repos/isaaclins/psst/releases/latest";
-const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CURRENT_VERSION: &str = psst_core::BUILD_VERSION;
 const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
 
 #[derive(Clone, Debug, Data, Serialize, Deserialize, PartialEq)]
@@ -115,8 +116,18 @@ impl UpdateInfo {
         let remote = remote.trim_start_matches('v');
         let current = current.trim_start_matches('v');
 
-        // For date-based versions like "2025.11.15-abc1234"
-        // Just do a string comparison since they're chronologically ordered
+        if remote == current {
+            return false;
+        }
+
+        if let (Ok(remote_semver), Ok(current_semver)) =
+            (Version::parse(remote), Version::parse(current))
+        {
+            return remote_semver > current_semver;
+        }
+
+        // For date-based versions like "2025.11.15-abc1234" just fall back to a string comparison;
+        // the lexical order preserves chronology when using ISO-style dates.
         remote > current
     }
 
