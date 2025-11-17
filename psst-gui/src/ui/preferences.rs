@@ -97,7 +97,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                     PreferencesTab::Account => {
                         account_tab_widget(AccountTab::InPreferences).boxed()
                     }
-                    PreferencesTab::Privacy => privacy_tab_widget().boxed(),
+                    PreferencesTab::DiscordPresence => discord_presence_tab_widget().boxed(),
                     PreferencesTab::Cache => cache_tab_widget().boxed(),
                     PreferencesTab::Updates => updates_tab_widget().boxed(),
                     PreferencesTab::About => about_tab_widget().boxed(),
@@ -168,9 +168,9 @@ fn tabs_widget() -> impl Widget<AppState> {
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
-            "Privacy",
+            "Discord Rich Presence",
             &icons::PREFERENCES,
-            PreferencesTab::Privacy,
+            PreferencesTab::DiscordPresence,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -1164,14 +1164,14 @@ impl<W: Widget<AppState>> Controller<AppState, W> for Authenticate {
     }
 }
 
-fn privacy_tab_widget() -> impl Widget<AppState> {
+fn discord_presence_tab_widget() -> impl Widget<AppState> {
     let mut col = Flex::column()
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .must_fill_main_axis(true);
 
     // Discord Rich Presence section
     col = col
-        .with_child(Label::new("Social Presence").with_font(theme::UI_FONT_MEDIUM))
+        .with_child(Label::new("Discord Rich Presence").with_font(theme::UI_FONT_MEDIUM))
         .with_spacer(theme::grid(2.0))
         .with_child(
             Label::new("Control what information is shared when you're listening to music.")
@@ -1209,7 +1209,7 @@ fn privacy_tab_widget() -> impl Widget<AppState> {
 
     col = col.with_spacer(theme::grid(3.0));
 
-    // Privacy controls section
+    // Presence controls section
     col = col
         .with_child(Label::new("Presence Information").with_font(theme::UI_FONT_MEDIUM))
         .with_spacer(theme::grid(2.0))

@@ -55,7 +55,7 @@ pub enum PreferencesTab {
     Appearance,
     Equalizer,
     Account,
-    Privacy,
+    DiscordPresence,
     Cache,
     Updates,
     About,
