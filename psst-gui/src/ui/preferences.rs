@@ -499,6 +499,8 @@ where
 fn export_theme(ctx: &mut EventCtx, _data: &AppState) {
     use druid::FileDialogOptions;
 
+    ctx.submit_command(cmd::BEGIN_THEME_EXPORT);
+
     let options = FileDialogOptions::new()
         .default_name("custom-theme.json")
         .allowed_types(vec![druid::FileSpec::new("JSON Theme File", &["json"])]);

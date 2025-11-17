@@ -174,11 +174,17 @@ impl UpdateInfo {
 
     pub fn get_download_url_for_platform(&self, platform: UpdatePlatform) -> Option<&str> {
         match platform {
+            #[cfg(any(test, target_os = "windows"))]
             UpdatePlatform::Windows => empty_to_none(&self.download_urls.windows),
+            #[cfg(any(test, target_os = "macos"))]
             UpdatePlatform::Macos => empty_to_none(&self.download_urls.macos),
+            #[cfg(any(test, target_os = "linux"))]
             UpdatePlatform::LinuxX86_64 => empty_to_none(&self.download_urls.linux_x86_64),
+            #[cfg(any(test, target_os = "linux"))]
             UpdatePlatform::LinuxAarch64 => empty_to_none(&self.download_urls.linux_aarch64),
+            #[cfg(test)]
             UpdatePlatform::DebAmd64 => empty_to_none(&self.download_urls.deb_amd64),
+            #[cfg(test)]
             UpdatePlatform::DebArm64 => empty_to_none(&self.download_urls.deb_arm64),
         }
     }
@@ -186,11 +192,17 @@ impl UpdateInfo {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UpdatePlatform {
+    #[cfg(any(test, target_os = "windows"))]
     Windows,
+    #[cfg(any(test, target_os = "macos"))]
     Macos,
+    #[cfg(any(test, target_os = "linux"))]
     LinuxX86_64,
+    #[cfg(any(test, target_os = "linux"))]
     LinuxAarch64,
+    #[cfg(test)]
     DebAmd64,
+    #[cfg(test)]
     DebArm64,
 }
 
@@ -228,8 +240,7 @@ impl UpdateInstaller {
 
         let file_name = parsed_url
             .path_segments()
-            .and_then(|segments| segments.last())
-            .filter(|segment| !segment.is_empty())
+            .and_then(|segments| segments.rev().find(|segment| !segment.is_empty()))
             .unwrap_or("psst-update.bin");
 
         let timestamp = SystemTime::now()

@@ -25,6 +25,10 @@ enum OpenDialogKind {
     ThemeImport,
 }
 
+enum SaveDialogKind {
+    ThemeExport,
+}
+
 pub struct Delegate {
     main_window: Option<WindowId>,
     preferences_window: Option<WindowId>,
@@ -33,6 +37,7 @@ pub struct Delegate {
     image_pool: ThreadPool,
     size_updated: bool,
     pending_open_dialog: Option<OpenDialogKind>,
+    pending_save_dialog: Option<SaveDialogKind>,
 }
 
 impl Delegate {
@@ -47,6 +52,7 @@ impl Delegate {
             image_pool: ThreadPool::with_name("image_loading".into(), MAX_IMAGE_THREADS),
             size_updated: false,
             pending_open_dialog: None,
+            pending_save_dialog: None,
         }
     }
 
@@ -173,6 +179,9 @@ impl AppDelegate<AppState> for Delegate {
         } else if cmd.is(cmd::BEGIN_THEME_IMPORT) {
             self.pending_open_dialog = Some(OpenDialogKind::ThemeImport);
             Handled::Yes
+        } else if cmd.is(cmd::BEGIN_THEME_EXPORT) {
+            self.pending_save_dialog = Some(SaveDialogKind::ThemeExport);
+            Handled::Yes
         } else if cmd.is(commands::CLOSE_WINDOW) {
             if let Some(window_id) = self.preferences_window {
                 if target == Target::Window(window_id) {
@@ -239,6 +248,29 @@ impl AppDelegate<AppState> for Delegate {
                 }
             }
             Handled::Yes
+        } else if let Some(file_info) = cmd.get(commands::SAVE_FILE_AS) {
+            let context = self
+                .pending_save_dialog
+                .take()
+                .unwrap_or(SaveDialogKind::ThemeExport);
+
+            match context {
+                SaveDialogKind::ThemeExport => {
+                    match data.config.custom_theme.export_to_file(file_info.path()) {
+                        Ok(()) => {
+                            data.info_alert(format!(
+                                "Theme exported to {}",
+                                file_info.path().display()
+                            ));
+                        }
+                        Err(e) => {
+                            data.error_alert(format!("Failed to export theme: {}", e));
+                        }
+                    }
+                }
+            }
+
+            Handled::Yes
         } else if cmd.is(cmd::CHECK_FOR_UPDATES) {
             // Handle update checking in background thread
             let event_sink = ctx.get_external_handle();
@@ -286,28 +318,27 @@ impl AppDelegate<AppState> for Delegate {
 
                 match install_result {
                     Ok(()) => {
+                        let success_message = format!(
+                            "Update {} installed. Restart Psst to finish.",
+                            info_clone.version
+                        );
                         event_sink
                             .submit_command(
                                 UPDATE_INSTALL_STATUS_CMD,
                                 UpdateInstallEvent::new(
                                     UpdateInstallPhase::Success,
-                                    &format!(
-                                        "Update {} installed. Restart Psst to finish.",
-                                        info_clone.version
-                                    ),
+                                    success_message,
                                 ),
                                 Target::Global,
                             )
                             .ok();
                     }
                     Err(err) => {
+                        let error_message = format!("Failed to install update: {}", err);
                         event_sink
                             .submit_command(
                                 UPDATE_INSTALL_STATUS_CMD,
-                                UpdateInstallEvent::new(
-                                    UpdateInstallPhase::Error,
-                                    &format!("Failed to install update: {}", err),
-                                ),
+                                UpdateInstallEvent::new(UpdateInstallPhase::Error, error_message),
                                 Target::Global,
                             )
                             .ok();
