@@ -3,6 +3,10 @@
 use git_version::git_version;
 
 pub const GIT_VERSION: &str = git_version!();
+pub const BUILD_VERSION: &str = match option_env!("RELEASE_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
 pub const BUILD_TIME: &str = include!(concat!(env!("OUT_DIR"), "/build-time.txt"));
 pub const REMOTE_URL: &str = include!(concat!(env!("OUT_DIR"), "/remote-url.txt"));
 

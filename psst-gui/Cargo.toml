@@ -36,6 +36,7 @@ ureq = { version = "3.0.11", features = ["json", "socks-proxy"] }
 url = { version = "2.5.4" }
 infer = "0.19.0"
 base64 = "0.22.1"
+semver = "1.0.26"
 
 # GUI
 druid = { git = "https://github.com/jpochyla/druid", branch = "psst", features = [
