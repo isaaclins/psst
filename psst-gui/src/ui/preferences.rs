@@ -8,15 +8,15 @@ use crate::{
     cmd,
     data::{
         AppState, AudioQuality, Authentication, Config, CustomTheme, Preferences, PreferencesTab,
-        Promise, SliderScrollScale, Theme,
+        Promise, SliderScrollScale, Theme, UpdatePreferences,
     },
     widget::{icons, Async, Border, Checkbox, MyWidgetExt},
 };
 use druid::{
     text::ParseFormatter,
     widget::{
-        Button, Controller, CrossAxisAlignment, Flex, Label, LineBreaking, MainAxisAlignment,
-        Painter, RadioGroup, Scroll, SizedBox, Slider, TextBox, ViewSwitcher,
+        Button, Controller, CrossAxisAlignment, Either, Flex, Label, LineBreaking,
+        MainAxisAlignment, Painter, RadioGroup, Scroll, SizedBox, Slider, TextBox, ViewSwitcher,
     },
     Color, Data, Env, Event, EventCtx, Insets, Lens, LensExt, LifeCycle, LifeCycleCtx,
     RenderContext, Selector, Target, Widget, WidgetExt,
@@ -99,6 +99,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                     }
                     PreferencesTab::Privacy => privacy_tab_widget().boxed(),
                     PreferencesTab::Cache => cache_tab_widget().boxed(),
+                    PreferencesTab::Updates => updates_tab_widget().boxed(),
                     PreferencesTab::About => about_tab_widget().boxed(),
                 },
             )
@@ -176,6 +177,12 @@ fn tabs_widget() -> impl Widget<AppState> {
             "Cache",
             &icons::STORAGE,
             PreferencesTab::Cache,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Updates",
+            &icons::CIRCLE_PLUS,
+            PreferencesTab::Updates,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -1479,6 +1486,120 @@ fn equalizer_band_slider(band_index: usize) -> impl Widget<AppState> {
             .fix_width(theme::grid(7.0)),
         )
         .padding((0.0, theme::grid(0.3), 0.0, 0.0))
+}
+
+fn updates_tab_widget() -> impl Widget<AppState> {
+    Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true)
+        .with_child(Label::new("Updates").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(Label::new(format!(
+            "Current Version: {}",
+            env!("CARGO_PKG_VERSION")
+        )))
+        .with_spacer(theme::grid(1.0))
+        .with_child(
+            Checkbox::new("Check for updates on startup").lens(
+                AppState::config
+                    .then(Config::update_preferences.then(UpdatePreferences::check_on_startup)),
+            ),
+        )
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Button::new("Check for Updates")
+                .on_click(|ctx, data: &mut AppState, _| {
+                    data.preferences.checking_update = true;
+                    ctx.submit_command(cmd::CHECK_FOR_UPDATES);
+                })
+                .disabled_if(|data: &AppState, _| data.preferences.checking_update),
+        )
+        .with_spacer(theme::grid(2.0))
+        .with_child(ViewSwitcher::new(
+            |state: &AppState, _| {
+                (
+                    state.preferences.checking_update,
+                    state.preferences.available_update.clone(),
+                )
+            },
+            |(checking, update_info), _, _| {
+                if *checking {
+                    Label::new("Checking for updates...").boxed()
+                } else if let Some(info) = update_info {
+                    Flex::column()
+                        .cross_axis_alignment(CrossAxisAlignment::Start)
+                        .with_child(
+                            Label::new(format!("New version available: {}", info.version))
+                                .with_text_color(Color::rgb8(138, 180, 248))
+                                .with_font(theme::UI_FONT_MEDIUM),
+                        )
+                        .with_spacer(theme::grid(1.0))
+                        .with_child(Label::new("Release Notes:").with_font(theme::UI_FONT_MEDIUM))
+                        .with_spacer(theme::grid(0.5))
+                        .with_child(
+                            Label::new(info.release_notes.clone())
+                                .with_line_break_mode(LineBreaking::WordWrap)
+                                .with_text_color(theme::PLACEHOLDER_COLOR),
+                        )
+                        .with_spacer(theme::grid(1.5))
+                        .with_child(
+                            Flex::row()
+                                .with_child({
+                                    let update_payload = info.clone();
+                                    Button::new("Install Update")
+                                        .on_click(move |ctx, _data: &mut AppState, _| {
+                                            ctx.submit_command(
+                                                cmd::INSTALL_UPDATE.with(update_payload.clone()),
+                                            );
+                                        })
+                                        .disabled_if(|data: &AppState, _| {
+                                            data.preferences.installing_update
+                                        })
+                                })
+                                .with_spacer(theme::grid(1.0))
+                                .with_child({
+                                    let release_url = info.release_url.clone();
+                                    Button::new("Open Release Page").on_click(move |_, _, _| {
+                                        open::that(&release_url).ok();
+                                    })
+                                }),
+                        )
+                        .with_spacer(theme::grid(1.0))
+                        .with_child(
+                            Button::new("Dismiss")
+                                .on_click(|_, data: &mut AppState, _| {
+                                    if let Some(ref info) = data.preferences.available_update {
+                                        data.config
+                                            .update_preferences
+                                            .dismiss_version(info.version.clone());
+                                        data.preferences.available_update = None;
+                                    }
+                                })
+                                .disabled_if(|data: &AppState, _| {
+                                    data.preferences.installing_update
+                                }),
+                        )
+                        .boxed()
+                } else {
+                    Label::new("Your application is up to date.")
+                        .with_text_color(theme::PLACEHOLDER_COLOR)
+                        .boxed()
+                }
+            },
+        ))
+        .with_spacer(theme::grid(1.0))
+        .with_child(Either::new(
+            |data: &AppState, _| data.preferences.update_install_status.is_some(),
+            Label::dynamic(|data: &AppState, _| {
+                data.preferences
+                    .update_install_status
+                    .clone()
+                    .unwrap_or_default()
+            })
+            .with_line_break_mode(LineBreaking::WordWrap)
+            .with_text_color(Color::rgb8(138, 180, 248)),
+            SizedBox::empty(),
+        ))
 }
 
 fn about_tab_widget() -> impl Widget<AppState> {

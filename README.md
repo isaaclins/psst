@@ -27,6 +27,16 @@ You can download the latest release for Windows, Linux, and macOS from the [GitH
 
 Unofficial builds of Psst are also available through the [AUR](https://aur.archlinux.org/packages/psst-git) and [Homebrew](https://formulae.brew.sh/cask/psst).
 
+### Automatic Updates
+
+Psst includes automatic update checking to keep you informed about new releases. By default, the app will check for updates on startup (no more than once per 24 hours). You can:
+- View available updates in **Preferences > Updates**
+- Manually check for updates at any time
+- Disable automatic checks if preferred
+- Dismiss specific versions you don't want to install
+
+See [docs/UPDATES.md](docs/UPDATES.md) for more information.
+
 ## Building
 
 On all platforms, the **latest [Rust](https://rustup.rs/) stable** (at least 1.65.0) is required.
@@ -130,6 +140,7 @@ cargo bundle --release
   - Rename playlist
   - Playlist folders
 - [x] Playback queue
+- [x] Automatic update checking
 - [ ] React to audio output device events
   - Pause after disconnecting headphones
   - Transfer playback after connecting headphones

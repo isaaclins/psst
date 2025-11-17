@@ -82,3 +82,9 @@ pub const LOAD_TRACK_CREDITS: Selector<Arc<Track>> = Selector::new("app.credits-
 
 // Artwork
 pub const SHOW_ARTWORK: Selector = Selector::new("app.show-artwork");
+
+// Updates
+pub const CHECK_FOR_UPDATES: Selector = Selector::new("app.check-for-updates");
+pub const INSTALL_UPDATE: Selector<crate::data::UpdateInfo> = Selector::new("app.install-update");
+pub const UPDATE_INSTALL_STATUS: Selector<crate::data::UpdateInstallEvent> =
+    Selector::new("app.update-install-status");
