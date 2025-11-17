@@ -5,9 +5,11 @@ use std::{
     fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
-    process::Command,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use std::process::Command;
 use url::Url;
 
 const GITHUB_API_URL: &str = "https://api.github.com/repos/isaaclins/psst/releases/latest";
@@ -178,9 +180,9 @@ impl UpdateInfo {
             UpdatePlatform::Windows => empty_to_none(&self.download_urls.windows),
             #[cfg(any(test, target_os = "macos"))]
             UpdatePlatform::Macos => empty_to_none(&self.download_urls.macos),
-            #[cfg(any(test, target_os = "linux"))]
+            #[cfg(any(test, all(target_os = "linux", target_arch = "x86_64")))]
             UpdatePlatform::LinuxX86_64 => empty_to_none(&self.download_urls.linux_x86_64),
-            #[cfg(any(test, target_os = "linux"))]
+            #[cfg(any(test, all(target_os = "linux", target_arch = "aarch64")))]
             UpdatePlatform::LinuxAarch64 => empty_to_none(&self.download_urls.linux_aarch64),
             #[cfg(test)]
             UpdatePlatform::DebAmd64 => empty_to_none(&self.download_urls.deb_amd64),
@@ -196,9 +198,9 @@ pub enum UpdatePlatform {
     Windows,
     #[cfg(any(test, target_os = "macos"))]
     Macos,
-    #[cfg(any(test, target_os = "linux"))]
+    #[cfg(any(test, all(target_os = "linux", target_arch = "x86_64")))]
     LinuxX86_64,
-    #[cfg(any(test, target_os = "linux"))]
+    #[cfg(any(test, all(target_os = "linux", target_arch = "aarch64")))]
     LinuxAarch64,
     #[cfg(test)]
     DebAmd64,
