@@ -61,7 +61,9 @@ pub use crate::data::{
     show::{Episode, EpisodeId, EpisodeLink, Show, ShowDetail, ShowEpisodes, ShowLink},
     slider_scroll_scale::SliderScrollScale,
     track::{AudioAnalysis, Track, TrackId, TrackLines},
-    update_checker::{UpdateInfo, UpdatePreferences},
+    update_checker::{
+        UpdateInfo, UpdateInstallEvent, UpdateInstallPhase, UpdateInstaller, UpdatePreferences,
+    },
     user::{PublicUser, UserProfile},
     utils::{Cached, Float64, Image, Page},
 };
@@ -132,6 +134,8 @@ impl AppState {
                 lastfm_auth_result: None,
                 available_update: None,
                 checking_update: false,
+                installing_update: false,
+                update_install_status: None,
             },
             playback,
             added_queue: Vector::new(),

@@ -29,9 +29,7 @@ fn run() -> Result<(), CliError> {
     let mut args = env::args();
     let _binary = args.next();
 
-    let track_id = args
-        .next()
-        .ok_or(CliError::MissingTrackId)?;
+    let track_id = args.next().ok_or(CliError::MissingTrackId)?;
     let eq_preset_name = args.next();
 
     let username = env::var("SPOTIFY_USERNAME").map_err(|_| CliError::MissingUsername)?;

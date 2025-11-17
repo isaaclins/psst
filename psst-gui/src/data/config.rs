@@ -32,6 +32,8 @@ pub struct Preferences {
     pub lastfm_auth_result: Option<String>,
     pub available_update: Option<UpdateInfo>,
     pub checking_update: bool,
+    pub installing_update: bool,
+    pub update_install_status: Option<String>,
 }
 
 impl Preferences {

@@ -1,6 +1,14 @@
 use druid::{Data, Lens};
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    env,
+    fs::{self, File},
+    io::{self, Write},
+    path::{Path, PathBuf},
+    process::Command,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+use url::Url;
 
 const GITHUB_API_URL: &str = "https://api.github.com/repos/isaaclins/psst/releases/latest";
 const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -37,6 +45,32 @@ struct GitHubAsset {
     name: String,
     browser_download_url: String,
 }
+
+#[derive(Clone, Debug, Data, PartialEq, Eq)]
+pub enum UpdateInstallPhase {
+    Starting,
+    Downloading,
+    Installing,
+    Success,
+    Error,
+}
+
+#[derive(Clone, Data)]
+pub struct UpdateInstallEvent {
+    pub phase: UpdateInstallPhase,
+    pub message: String,
+}
+
+impl UpdateInstallEvent {
+    pub fn new(phase: UpdateInstallPhase, message: impl Into<String>) -> Self {
+        Self {
+            phase,
+            message: message.into(),
+        }
+    }
+}
+
+pub struct UpdateInstaller;
 
 impl UpdateInfo {
     /// Check if there's a new version available by querying GitHub API
@@ -114,33 +148,299 @@ impl UpdateInfo {
     pub fn get_platform_download_url(&self) -> Option<&str> {
         #[cfg(target_os = "windows")]
         {
-            if !self.download_urls.windows.is_empty() {
-                return Some(self.download_urls.windows.as_str());
-            }
+            return self.get_download_url_for_platform(UpdatePlatform::Windows);
         }
 
         #[cfg(target_os = "macos")]
         {
-            if !self.download_urls.macos.is_empty() {
-                return Some(self.download_urls.macos.as_str());
-            }
+            return self.get_download_url_for_platform(UpdatePlatform::Macos);
         }
 
         #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
         {
-            if !self.download_urls.linux_x86_64.is_empty() {
-                return Some(self.download_urls.linux_x86_64.as_str());
-            }
+            return self.get_download_url_for_platform(UpdatePlatform::LinuxX86_64);
         }
 
         #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
         {
-            if !self.download_urls.linux_aarch64.is_empty() {
-                return Some(self.download_urls.linux_aarch64.as_str());
+            return self.get_download_url_for_platform(UpdatePlatform::LinuxAarch64);
+        }
+
+        #[allow(unreachable_code)]
+        {
+            None
+        }
+    }
+
+    pub fn get_download_url_for_platform(&self, platform: UpdatePlatform) -> Option<&str> {
+        match platform {
+            UpdatePlatform::Windows => empty_to_none(&self.download_urls.windows),
+            UpdatePlatform::Macos => empty_to_none(&self.download_urls.macos),
+            UpdatePlatform::LinuxX86_64 => empty_to_none(&self.download_urls.linux_x86_64),
+            UpdatePlatform::LinuxAarch64 => empty_to_none(&self.download_urls.linux_aarch64),
+            UpdatePlatform::DebAmd64 => empty_to_none(&self.download_urls.deb_amd64),
+            UpdatePlatform::DebArm64 => empty_to_none(&self.download_urls.deb_arm64),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpdatePlatform {
+    Windows,
+    Macos,
+    LinuxX86_64,
+    LinuxAarch64,
+    DebAmd64,
+    DebArm64,
+}
+
+fn empty_to_none(value: &str) -> Option<&str> {
+    if value.is_empty() {
+        None
+    } else {
+        Some(value)
+    }
+}
+
+impl UpdateInstaller {
+    pub fn download_and_install<F>(info: &UpdateInfo, mut notify: F) -> Result<(), String>
+    where
+        F: FnMut(UpdateInstallPhase, &str),
+    {
+        notify(UpdateInstallPhase::Downloading, "Downloading update...");
+        let download_path = Self::download_update_payload(info)?;
+
+        let installing_message = format!("Installing update {}...", info.version);
+        notify(UpdateInstallPhase::Installing, &installing_message);
+
+        let install_result = Self::install_downloaded_payload(info, &download_path);
+        let _ = fs::remove_file(&download_path);
+
+        install_result
+    }
+
+    fn download_update_payload(info: &UpdateInfo) -> Result<PathBuf, String> {
+        let url = info
+            .get_platform_download_url()
+            .ok_or_else(|| "No download available for this platform".to_string())?;
+
+        let parsed_url = Url::parse(url).map_err(|e| format!("Invalid download URL: {}", e))?;
+
+        let file_name = parsed_url
+            .path_segments()
+            .and_then(|segments| segments.last())
+            .filter(|segment| !segment.is_empty())
+            .unwrap_or("psst-update.bin");
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let temp_file_name = format!("psst-update-{}-{}", timestamp, file_name);
+        let temp_path = env::temp_dir().join(temp_file_name);
+
+        log::info!(
+            "Downloading update {} from {} to {}",
+            info.version,
+            url,
+            temp_path.display()
+        );
+
+        let response = ureq::get(url)
+            .call()
+            .map_err(|e| format!("Failed to download update: {}", e))?;
+
+        let mut reader = response.into_body().into_reader();
+        let mut file = File::create(&temp_path)
+            .map_err(|e| format!("Failed to create temporary file: {}", e))?;
+
+        io::copy(&mut reader, &mut file)
+            .map_err(|e| format!("Failed to write update payload: {}", e))?;
+        file.flush()
+            .map_err(|e| format!("Failed to flush update payload: {}", e))?;
+
+        Ok(temp_path)
+    }
+
+    fn install_downloaded_payload(info: &UpdateInfo, path: &Path) -> Result<(), String> {
+        Self::install_platform_payload(info, path)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn install_platform_payload(_info: &UpdateInfo, path: &Path) -> Result<(), String> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mount_dir = env::temp_dir().join(format!("psst-update-mount-{}", timestamp));
+        fs::create_dir_all(&mount_dir)
+            .map_err(|e| format!("Failed to create mount point: {}", e))?;
+
+        let attach_status = Command::new("hdiutil")
+            .arg("attach")
+            .arg(path)
+            .arg("-nobrowse")
+            .arg("-mountpoint")
+            .arg(&mount_dir)
+            .status()
+            .map_err(|e| format!("Failed to mount update image: {}", e))?;
+
+        if !attach_status.success() {
+            return Err(format!(
+                "Failed to mount update image (exit code {:?})",
+                attach_status.code()
+            ));
+        }
+
+        struct MountGuard {
+            mount_point: PathBuf,
+        }
+
+        impl Drop for MountGuard {
+            fn drop(&mut self) {
+                if let Err(err) = Command::new("hdiutil")
+                    .arg("detach")
+                    .arg(&self.mount_point)
+                    .arg("-quiet")
+                    .status()
+                {
+                    log::warn!("Failed to detach update image: {}", err);
+                }
+                if let Err(err) = fs::remove_dir_all(&self.mount_point) {
+                    log::warn!("Failed to remove temporary mount point: {}", err);
+                }
             }
         }
 
-        None
+        let mount_guard = MountGuard {
+            mount_point: mount_dir.clone(),
+        };
+
+        let app_bundle = mount_dir.join("Psst.app");
+        if !app_bundle.exists() {
+            return Err("Mounted image does not contain Psst.app".into());
+        }
+
+        let applications_dir = Path::new("/Applications/Psst.app");
+        if applications_dir.exists() {
+            fs::remove_dir_all(applications_dir)
+                .map_err(|e| format!("Failed to remove existing installation: {}", e))?;
+        }
+
+        let copy_status = Command::new("cp")
+            .arg("-R")
+            .arg(&app_bundle)
+            .arg("/Applications/")
+            .status()
+            .map_err(|e| format!("Failed to copy new application bundle: {}", e))?;
+
+        if !copy_status.success() {
+            return Err(format!(
+                "Failed to copy new application bundle (exit code {:?})",
+                copy_status.code()
+            ));
+        }
+
+        if let Err(err) = Command::new("xattr")
+            .arg("-dr")
+            .arg("com.apple.quarantine")
+            .arg("/Applications/Psst.app/")
+            .status()
+        {
+            log::warn!("Failed to remove quarantine flag: {}", err);
+        }
+
+        if let Err(err) = Command::new("xattr")
+            .arg("-l")
+            .arg("/Applications/Psst.app/")
+            .status()
+        {
+            log::warn!("Failed to list xattr for Psst.app: {}", err);
+        }
+
+        drop(mount_guard);
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn install_platform_payload(_info: &UpdateInfo, path: &Path) -> Result<(), String> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let current_exe = env::current_exe()
+            .map_err(|e| format!("Failed to determine current executable: {}", e))?;
+        let target_dir = current_exe
+            .parent()
+            .ok_or_else(|| "Failed to determine installation directory".to_string())?;
+
+        let file_name = current_exe
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("psst");
+
+        let staging = target_dir.join(format!("{}.update", file_name));
+
+        if staging.exists() {
+            fs::remove_file(&staging)
+                .map_err(|e| format!("Failed to remove stale staging file: {}", e))?;
+        }
+
+        fs::copy(path, &staging).map_err(|e| format!("Failed to stage updated binary: {}", e))?;
+
+        fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("Failed to set permissions on staged binary: {}", e))?;
+
+        fs::rename(&staging, &current_exe)
+            .map_err(|e| format!("Failed to replace current binary: {}", e))?;
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    fn install_platform_payload(_info: &UpdateInfo, path: &Path) -> Result<(), String> {
+        let current_exe = env::current_exe()
+            .map_err(|e| format!("Failed to determine current executable: {}", e))?;
+        let target_dir = current_exe
+            .parent()
+            .ok_or_else(|| "Failed to determine installation directory".to_string())?;
+
+        let staged_path = target_dir.join("Psst.update.exe");
+
+        if staged_path.exists() {
+            fs::remove_file(&staged_path)
+                .map_err(|e| format!("Failed to remove stale staged update: {}", e))?;
+        }
+
+        fs::copy(path, &staged_path)
+            .map_err(|e| format!("Failed to stage updated executable: {}", e))?;
+
+        let pid = std::process::id();
+        let staged = staged_path
+            .to_str()
+            .ok_or_else(|| "Staged path contains invalid unicode".to_string())?
+            .replace('"', "\"");
+        let target = current_exe
+            .to_str()
+            .ok_or_else(|| "Executable path contains invalid unicode".to_string())?
+            .replace('"', "\"");
+
+        let script = format!(
+            "$ErrorActionPreference='Stop'; Wait-Process -Id {pid}; Copy-Item -Path \"{staged}\" -Destination \"{target}\" -Force; Remove-Item -Path \"{staged}\" -Force",
+            pid = pid,
+            staged = staged,
+            target = target,
+        );
+
+        Command::new("powershell")
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+            .spawn()
+            .map_err(|e| format!("Failed to schedule update replacement: {}", e))?;
+
+        Ok(())
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    fn install_platform_payload(_info: &UpdateInfo, _path: &Path) -> Result<(), String> {
+        Err("Automatic installation is not supported on this platform".into())
     }
 }
 
@@ -224,13 +524,13 @@ mod tests {
     #[test]
     fn test_should_check_for_updates() {
         let mut prefs = UpdatePreferences::default();
-        
+
         // Should check on first run
         assert!(prefs.should_check_for_updates());
 
         // Mark as checked
         prefs.mark_checked();
-        
+
         // Should not check immediately after
         assert!(!prefs.should_check_for_updates());
 
@@ -242,11 +542,11 @@ mod tests {
     #[test]
     fn test_dismiss_version() {
         let mut prefs = UpdatePreferences::default();
-        
+
         assert!(!prefs.is_version_dismissed("2025.11.15"));
-        
+
         prefs.dismiss_version("2025.11.15".to_string());
-        
+
         assert!(prefs.is_version_dismissed("2025.11.15"));
         assert!(!prefs.is_version_dismissed("2025.11.16"));
     }
@@ -265,9 +565,80 @@ mod tests {
         ];
 
         let urls = UpdateInfo::extract_download_urls(&assets);
-        
+
         assert_eq!(urls.windows, "https://example.com/Psst.exe");
         assert_eq!(urls.macos, "https://example.com/Psst.dmg");
         assert!(urls.linux_x86_64.is_empty());
+    }
+
+    fn sample_update_info() -> UpdateInfo {
+        UpdateInfo {
+            version: "2025.11.17".into(),
+            release_url: "https://example.com/release".into(),
+            release_notes: String::new(),
+            download_urls: DownloadUrls {
+                windows: "https://example.com/Psst.exe".into(),
+                macos: "https://example.com/Psst.dmg".into(),
+                linux_x86_64: "https://example.com/psst-linux-x86_64".into(),
+                linux_aarch64: "https://example.com/psst-linux-aarch64".into(),
+                deb_amd64: "https://example.com/psst-amd64.deb".into(),
+                deb_arm64: "https://example.com/psst-arm64.deb".into(),
+            },
+        }
+    }
+
+    #[test]
+    fn test_platform_url_lookup() {
+        let info = sample_update_info();
+
+        assert_eq!(
+            info.get_download_url_for_platform(UpdatePlatform::Windows),
+            Some("https://example.com/Psst.exe")
+        );
+        assert_eq!(
+            info.get_download_url_for_platform(UpdatePlatform::Macos),
+            Some("https://example.com/Psst.dmg")
+        );
+        assert_eq!(
+            info.get_download_url_for_platform(UpdatePlatform::LinuxX86_64),
+            Some("https://example.com/psst-linux-x86_64")
+        );
+        assert_eq!(
+            info.get_download_url_for_platform(UpdatePlatform::LinuxAarch64),
+            Some("https://example.com/psst-linux-aarch64")
+        );
+        assert_eq!(
+            info.get_download_url_for_platform(UpdatePlatform::DebAmd64),
+            Some("https://example.com/psst-amd64.deb")
+        );
+        assert_eq!(
+            info.get_download_url_for_platform(UpdatePlatform::DebArm64),
+            Some("https://example.com/psst-arm64.deb")
+        );
+    }
+
+    #[test]
+    fn test_install_requires_platform_url() {
+        let mut info = sample_update_info();
+        info.download_urls.macos.clear();
+        info.download_urls.windows.clear();
+        info.download_urls.linux_x86_64.clear();
+        info.download_urls.linux_aarch64.clear();
+        info.download_urls.deb_amd64.clear();
+        info.download_urls.deb_arm64.clear();
+
+        let mut notifications = Vec::new();
+        let result = UpdateInstaller::download_and_install(&info, |phase, message| {
+            notifications.push((phase, message.to_string()))
+        });
+
+        assert!(result.is_err());
+        assert_eq!(
+            notifications,
+            vec![(
+                UpdateInstallPhase::Downloading,
+                "Downloading update...".to_string()
+            )]
+        );
     }
 }

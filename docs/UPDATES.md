@@ -19,6 +19,7 @@ You can manually check for updates at any time:
 ### Version Information
 
 The Updates tab shows:
+
 - Your current version
 - Whether an update is available
 - Release notes for new versions
@@ -38,29 +39,27 @@ Psst will save this preference and won't check for updates automatically until y
 ### Update Frequency
 
 When automatic checking is enabled, Psst checks for updates:
+
 - On application startup
 - No more than once per 24 hours
 
 This ensures you're notified of new versions without excessive network requests.
 
-## Downloading Updates
+## Installing Updates
 
-When an update is available:
+When an update is available, click **Install Update** in the Updates tab and Psst will do the rest:
 
-1. Click **Download Update** button in the Updates tab
-2. This will open your default browser to the download page
-3. Download the appropriate version for your platform:
-   - **Windows**: `Psst.exe`
-   - **macOS**: `Psst.dmg`
-   - **Linux**: Binary or `.deb` package
+1. The updater downloads the latest release asset for your platform.
+2. Psst installs the update in the background without blocking the UI.
+3. A status message confirms success or reports any errors.
 
-### Platform-Specific Downloads
+### Platform Notes
 
-Psst automatically detects your platform and provides the appropriate download link. For Linux users, we provide:
-- Binary executable for x86_64
-- Binary executable for aarch64 (ARM)
-- Debian packages for amd64
-- Debian packages for arm64
+- **macOS**: The updater mounts the DMG, copies `Psst.app` into `/Applications`, removes any quarantine flags with `xattr -dr com.apple.quarantine /Applications/Psst.app/`, and verifies attributes via `xattr -l /Applications/Psst.app/`.
+- **Windows**: A silent PowerShell helper stages the new `Psst.exe` and replaces the current executable after you exit the app. Restart Psst to finish the update.
+- **Linux**: The staged binary replaces the currently running executable in-place. Restart Psst to run the new version.
+
+If automatic installation is unavailable (for example on unsupported platforms), the updater offers an easy shortcut to open the release page so you can download manually.
 
 ## Dismissing Updates
 
@@ -81,7 +80,7 @@ If you don't want to install a specific update:
 
 - **No tracking**: Psst only checks the official GitHub repository for releases
 - **HTTPS only**: All update checks use secure HTTPS connections
-- **Manual installation**: Updates are never downloaded or installed automatically
+- **User-initiated installation**: Updates are downloaded and installed only after you click **Install Update**—no silent background updates
 - **No personal data**: No personal information is sent during update checks
 
 ## Troubleshooting
@@ -89,6 +88,7 @@ If you don't want to install a specific update:
 ### Update Check Failed
 
 If update checking fails, possible causes include:
+
 - No internet connection
 - GitHub API temporarily unavailable
 - Firewall or proxy blocking GitHub access
@@ -98,6 +98,7 @@ The error will be logged, and you can try checking again later.
 ### No Updates Shown
 
 If no updates appear:
+
 - You're running the latest version
 - You've dismissed the latest version (check your config)
 - The update check hasn't run yet (wait for startup or manually check)
@@ -106,17 +107,36 @@ If no updates appear:
 
 Psst uses date-based versions in the format `YYYY.MM.DD-COMMIT`. This makes it easy to see how recent your version is.
 
+## Manual Validation Checklist
+
+To smoke-test the installer on each platform:
+
+- **macOS**
+  - Download the latest universal DMG from the Releases page.
+  - Launch Psst and use **Preferences → Updates → Install Update** while the DMG is on disk.
+  - When prompted in the logs, confirm `/Applications/Psst.app` was replaced and run `xattr -l /Applications/Psst.app/` to verify no quarantine flag remains.
+- **Windows**
+  - Place the newest `Psst.exe` in a writable folder alongside the running build.
+  - Trigger **Install Update** and exit the app; ensure `Psst.update.exe` is created and deleted after restart, and the timestamp on `Psst.exe` is updated.
+- **Linux (x86_64 & aarch64)**
+  - Copy the corresponding binary next to the existing executable and run the installer.
+  - Confirm the executable is replaced in-place and marked executable (`chmod +x`).
+
+The automated unit tests cover error-handling, URL selection, and notification sequencing, but the above manual checks verify platform tooling (hdiutil, PowerShell, filesystem permissions) that cannot be exercised in CI.
+
 ## Technical Details
 
 ### GitHub Integration
 
 Updates are fetched from the official Psst GitHub repository:
+
 - Repository: `isaaclins/psst`
 - API endpoint: `https://api.github.com/repos/isaaclins/psst/releases/latest`
 
 ### Configuration Storage
 
 Update preferences are stored in your Psst configuration file:
+
 - `check_on_startup`: Boolean flag for automatic checking
 - `last_check_timestamp`: Unix timestamp of last check
 - `dismissed_version`: Version you've chosen to ignore
@@ -124,6 +144,7 @@ Update preferences are stored in your Psst configuration file:
 ### Release Assets
 
 Each release includes pre-built binaries for:
+
 - Windows (x86_64)
 - macOS (Universal binary: x86_64 + ARM64)
 - Linux x86_64 (binary and .deb)
