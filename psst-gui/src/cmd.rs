@@ -23,6 +23,7 @@ pub const GO_TO_URL: Selector<String> = Selector::new("app.go-to-url");
 pub const OAUTH_TOKENS_REFRESHED: Selector<(String, Option<String>)> =
     Selector::new("app.oauth-tokens-refreshed");
 pub const BEGIN_THEME_IMPORT: Selector = Selector::new("app.begin-theme-import");
+pub const BEGIN_THEME_EXPORT: Selector = Selector::new("app.begin-theme-export");
 
 // Find
 pub const TOGGLE_FINDER: Selector = Selector::new("app.show-finder");
@@ -82,3 +83,9 @@ pub const LOAD_TRACK_CREDITS: Selector<Arc<Track>> = Selector::new("app.credits-
 
 // Artwork
 pub const SHOW_ARTWORK: Selector = Selector::new("app.show-artwork");
+
+// Updates
+pub const CHECK_FOR_UPDATES: Selector = Selector::new("app.check-for-updates");
+pub const INSTALL_UPDATE: Selector<crate::data::UpdateInfo> = Selector::new("app.install-update");
+pub const UPDATE_INSTALL_STATUS: Selector<crate::data::UpdateInstallEvent> =
+    Selector::new("app.update-install-status");

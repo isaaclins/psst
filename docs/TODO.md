@@ -6,5 +6,4 @@
 
 # TODO: Support custom themes with the given theme editor under the Appearance settings view and implement export/import functionality for sharing color palettes and typography by defining a theming schema, adding live preview tooling (including font pickers limited to installed fonts), wiring persistence, and wiring export/import buttons that export the theme config to a user-chosen location OR load from a user-selected file.
 
-# ✅ COMPLETED: Added comprehensive test suite with 70+ tests covering edge cases, error handling, unit tests, and integration tests. Tests can be run from ./scripts/run-tests.sh and are integrated into CI gating. See TESTING.md for details.
-
+# ✅ COMPLETED: Added comprehensive test suite with 70+ tests covering edge cases, error handling, unit tests, and integration tests. Tests can be w

@@ -1,27 +1,32 @@
-use directories::UserDirs;
 use druid::{
     commands, AppDelegate, Application, Command, DelegateCtx, Env, Event, Handled, Target,
     WindowDesc, WindowId,
 };
-use std::fs;
 use threadpool::ThreadPool;
 
 use crate::ui::playlist::{
     RENAME_PLAYLIST, RENAME_PLAYLIST_CONFIRM, UNFOLLOW_PLAYLIST, UNFOLLOW_PLAYLIST_CONFIRM,
 };
 use crate::ui::theme;
-use crate::ui::DOWNLOAD_ARTWORK;
 use crate::{
     cmd,
-    data::{AppState, Config},
+    data::{AppState, Config, UpdateInfo, UpdateInstallEvent, UpdateInstallPhase, UpdateInstaller},
     token_utils::TokenUtils,
     ui,
     webapi::WebApi,
     widget::remote_image,
 };
+use druid::Selector;
+
+const UPDATE_CHECK_RESULT: Selector<Option<UpdateInfo>> = Selector::new("app.update-check-result");
+const UPDATE_INSTALL_STATUS_CMD: Selector<UpdateInstallEvent> = cmd::UPDATE_INSTALL_STATUS;
 
 enum OpenDialogKind {
     ThemeImport,
+}
+
+enum SaveDialogKind {
+    ThemeExport,
 }
 
 pub struct Delegate {
@@ -32,6 +37,7 @@ pub struct Delegate {
     image_pool: ThreadPool,
     size_updated: bool,
     pending_open_dialog: Option<OpenDialogKind>,
+    pending_save_dialog: Option<SaveDialogKind>,
 }
 
 impl Delegate {
@@ -46,6 +52,7 @@ impl Delegate {
             image_pool: ThreadPool::with_name("image_loading".into(), MAX_IMAGE_THREADS),
             size_updated: false,
             pending_open_dialog: None,
+            pending_save_dialog: None,
         }
     }
 
@@ -172,6 +179,9 @@ impl AppDelegate<AppState> for Delegate {
         } else if cmd.is(cmd::BEGIN_THEME_IMPORT) {
             self.pending_open_dialog = Some(OpenDialogKind::ThemeImport);
             Handled::Yes
+        } else if cmd.is(cmd::BEGIN_THEME_EXPORT) {
+            self.pending_save_dialog = Some(SaveDialogKind::ThemeExport);
+            Handled::Yes
         } else if cmd.is(commands::CLOSE_WINDOW) {
             if let Some(window_id) = self.preferences_window {
                 if target == Target::Window(window_id) {
@@ -207,28 +217,6 @@ impl AppDelegate<AppState> for Delegate {
         } else if cmd.is(crate::cmd::SHOW_ARTWORK) {
             self.show_artwork(ctx);
             Handled::Yes
-        } else if let Some((url, title)) = cmd.get(DOWNLOAD_ARTWORK) {
-            let safe_title = title.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
-            let file_name = format!("{safe_title} cover.jpg");
-
-            if let Some(user_dirs) = UserDirs::new() {
-                if let Some(download_dir) = user_dirs.download_dir() {
-                    let path = download_dir.join(file_name);
-
-                    match ureq::get(url)
-                        .call()
-                        .and_then(|response| -> Result<(), ureq::Error> {
-                            let mut file = fs::File::create(&path)?;
-                            let mut reader = response.into_body().into_reader();
-                            std::io::copy(&mut reader, &mut file)?;
-                            Ok(())
-                        }) {
-                        Ok(_) => data.info_alert("Cover saved to Downloads folder."),
-                        Err(_) => data.error_alert("Failed to download and save artwork"),
-                    }
-                }
-            }
-            Handled::Yes
         } else if let Some((access, refresh)) = cmd.get(cmd::OAUTH_TOKENS_REFRESHED) {
             TokenUtils::apply_refresh_result(
                 &data.session,
@@ -237,14 +225,6 @@ impl AppDelegate<AppState> for Delegate {
                 refresh.clone(),
                 true,
             );
-            Handled::Yes
-        } else if let Some(file_info) = cmd.get(commands::SAVE_FILE_AS) {
-            // Handle theme export
-            if let Err(e) = data.config.custom_theme.export_to_file(file_info.path()) {
-                data.error_alert(format!("Failed to export theme: {}", e));
-            } else {
-                data.info_alert("Theme exported successfully");
-            }
             Handled::Yes
         } else if let Some(file_info) = cmd.get(commands::OPEN_FILE) {
             let context = self
@@ -267,6 +247,145 @@ impl AppDelegate<AppState> for Delegate {
                     }
                 }
             }
+            Handled::Yes
+        } else if let Some(file_info) = cmd.get(commands::SAVE_FILE_AS) {
+            let context = self
+                .pending_save_dialog
+                .take()
+                .unwrap_or(SaveDialogKind::ThemeExport);
+
+            match context {
+                SaveDialogKind::ThemeExport => {
+                    match data.config.custom_theme.export_to_file(file_info.path()) {
+                        Ok(()) => {
+                            data.info_alert(format!(
+                                "Theme exported to {}",
+                                file_info.path().display()
+                            ));
+                        }
+                        Err(e) => {
+                            data.error_alert(format!("Failed to export theme: {}", e));
+                        }
+                    }
+                }
+            }
+
+            Handled::Yes
+        } else if cmd.is(cmd::CHECK_FOR_UPDATES) {
+            // Handle update checking in background thread
+            let event_sink = ctx.get_external_handle();
+            std::thread::spawn(move || match crate::data::UpdateInfo::check_for_updates() {
+                Ok(update_info) => {
+                    event_sink
+                        .submit_command(UPDATE_CHECK_RESULT, update_info, Target::Global)
+                        .ok();
+                }
+                Err(e) => {
+                    log::error!("Failed to check for updates: {}", e);
+                    event_sink
+                        .submit_command(UPDATE_CHECK_RESULT, None, Target::Global)
+                        .ok();
+                }
+            });
+            Handled::Yes
+        } else if let Some(info) = cmd.get(cmd::INSTALL_UPDATE) {
+            data.preferences.installing_update = true;
+            data.preferences.update_install_status =
+                Some(format!("Preparing to install {}...", info.version));
+
+            let event_sink = ctx.get_external_handle();
+            let info_clone = info.clone();
+
+            std::thread::spawn(move || {
+                event_sink
+                    .submit_command(
+                        UPDATE_INSTALL_STATUS_CMD,
+                        UpdateInstallEvent::new(UpdateInstallPhase::Starting, "Starting update..."),
+                        Target::Global,
+                    )
+                    .ok();
+
+                let install_result =
+                    UpdateInstaller::download_and_install(&info_clone, |phase, message| {
+                        event_sink
+                            .submit_command(
+                                UPDATE_INSTALL_STATUS_CMD,
+                                UpdateInstallEvent::new(phase, message),
+                                Target::Global,
+                            )
+                            .ok();
+                    });
+
+                match install_result {
+                    Ok(()) => {
+                        let success_message = format!(
+                            "Update {} installed. Restart Psst to finish.",
+                            info_clone.version
+                        );
+                        event_sink
+                            .submit_command(
+                                UPDATE_INSTALL_STATUS_CMD,
+                                UpdateInstallEvent::new(
+                                    UpdateInstallPhase::Success,
+                                    success_message,
+                                ),
+                                Target::Global,
+                            )
+                            .ok();
+                    }
+                    Err(err) => {
+                        let error_message = format!("Failed to install update: {}", err);
+                        event_sink
+                            .submit_command(
+                                UPDATE_INSTALL_STATUS_CMD,
+                                UpdateInstallEvent::new(UpdateInstallPhase::Error, error_message),
+                                Target::Global,
+                            )
+                            .ok();
+                    }
+                }
+            });
+
+            Handled::Yes
+        } else if let Some(event) = cmd.get(UPDATE_INSTALL_STATUS_CMD) {
+            match event.phase {
+                UpdateInstallPhase::Starting
+                | UpdateInstallPhase::Downloading
+                | UpdateInstallPhase::Installing => {
+                    data.preferences.update_install_status = Some(event.message.clone());
+                    data.preferences.installing_update = true;
+                }
+                UpdateInstallPhase::Success => {
+                    data.preferences.update_install_status = Some(event.message.clone());
+                    data.preferences.installing_update = false;
+                    data.preferences.available_update = None;
+                    data.info_alert(
+                        "Update installed. Please restart Psst to finish installation.",
+                    );
+                }
+                UpdateInstallPhase::Error => {
+                    data.preferences.update_install_status = Some(event.message.clone());
+                    data.preferences.installing_update = false;
+                    data.error_alert(event.message.clone());
+                }
+            }
+            Handled::Yes
+        } else if let Some(update_info) = cmd.get(UPDATE_CHECK_RESULT) {
+            data.preferences.checking_update = false;
+            // Only show update if it hasn't been dismissed
+            if let Some(ref info) = update_info {
+                if !data
+                    .config
+                    .update_preferences
+                    .is_version_dismissed(&info.version)
+                {
+                    data.preferences.available_update = update_info.clone();
+                }
+            } else {
+                data.preferences.available_update = None;
+            }
+            // Mark as checked
+            data.config.update_preferences.mark_checked();
             Handled::Yes
         } else {
             Handled::No

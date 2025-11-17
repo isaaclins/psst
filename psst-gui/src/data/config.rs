@@ -19,7 +19,7 @@ use psst_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{Nav, Promise, QueueBehavior, SliderScrollScale};
+use super::{Nav, Promise, QueueBehavior, SliderScrollScale, UpdateInfo, UpdatePreferences};
 use crate::ui::theme;
 
 #[derive(Clone, Debug, Data, Lens)]
@@ -30,6 +30,10 @@ pub struct Preferences {
     pub cache_size: Promise<u64, (), ()>,
     pub auth: Authentication,
     pub lastfm_auth_result: Option<String>,
+    pub available_update: Option<UpdateInfo>,
+    pub checking_update: bool,
+    pub installing_update: bool,
+    pub update_install_status: Option<String>,
 }
 
 impl Preferences {
@@ -51,8 +55,9 @@ pub enum PreferencesTab {
     Appearance,
     Equalizer,
     Account,
-    Privacy,
+    DiscordPresence,
     Cache,
+    Updates,
     About,
 }
 
@@ -160,6 +165,8 @@ pub struct Config {
     #[data(ignore)]
     #[serde(default)]
     pub custom_equalizer_presets: Vec<EqualizerPreset>,
+    #[serde(default)]
+    pub update_preferences: UpdatePreferences,
 }
 
 impl Default for Config {
@@ -195,6 +202,7 @@ impl Default for Config {
             presence_dynamic_cover: false,
             equalizer: Default::default(),
             custom_equalizer_presets: Vec::new(),
+            update_preferences: Default::default(),
         }
     }
 }
