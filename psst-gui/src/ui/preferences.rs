@@ -1612,27 +1612,29 @@ fn updates_tab_widget() -> impl Widget<AppState> {
 }
 
 fn keybinds_tab_widget() -> impl Widget<AppState> {
-    use crate::data::config::{KeybindAction, KeybindsConfig};
-    
+    use crate::data::config::KeybindAction;
+
     let mut col = Flex::column()
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .must_fill_main_axis(true);
-    
+
     col = col
         .with_child(Label::new("Keyboard Shortcuts").with_font(theme::UI_FONT_MEDIUM))
         .with_spacer(theme::grid(2.0))
         .with_child(
-            Label::new("Customize keyboard shortcuts for all actions. Changes are saved automatically.")
-                .with_text_color(theme::PLACEHOLDER_COLOR)
-                .with_line_break_mode(LineBreaking::WordWrap),
+            Label::new(
+                "Customize keyboard shortcuts for all actions. Changes are saved automatically.",
+            )
+            .with_text_color(theme::PLACEHOLDER_COLOR)
+            .with_line_break_mode(LineBreaking::WordWrap),
         )
         .with_spacer(theme::grid(3.0));
-    
+
     // Add sections for different categories of keybinds
     col = col
         .with_child(Label::new("Playback Controls").with_font(theme::UI_FONT_MEDIUM))
         .with_spacer(theme::grid(1.0));
-    
+
     // Add keybind items for playback controls
     let playback_actions = vec![
         KeybindAction::PlayPause,
@@ -1643,18 +1645,18 @@ fn keybinds_tab_widget() -> impl Widget<AppState> {
         KeybindAction::VolumeUp,
         KeybindAction::VolumeDown,
     ];
-    
+
     for action in playback_actions {
         col = col.with_child(keybind_row(action));
     }
-    
+
     col = col.with_spacer(theme::grid(3.0));
-    
+
     // Navigation controls
     col = col
         .with_child(Label::new("Navigation").with_font(theme::UI_FONT_MEDIUM))
         .with_spacer(theme::grid(1.0));
-    
+
     let nav_actions = vec![
         KeybindAction::NavigateHome,
         KeybindAction::NavigateSavedTracks,
@@ -1664,50 +1666,49 @@ fn keybinds_tab_widget() -> impl Widget<AppState> {
         KeybindAction::NavigateBack,
         KeybindAction::NavigateRefresh,
     ];
-    
+
     for action in nav_actions {
         col = col.with_child(keybind_row(action));
     }
-    
+
     col = col.with_spacer(theme::grid(3.0));
-    
+
     // UI Controls
     col = col
         .with_child(Label::new("UI Controls").with_font(theme::UI_FONT_MEDIUM))
         .with_spacer(theme::grid(1.0));
-    
+
     let ui_actions = vec![
         KeybindAction::ToggleLyrics,
         KeybindAction::OpenPreferences,
         KeybindAction::ToggleFinder,
     ];
-    
+
     for action in ui_actions {
         col = col.with_child(keybind_row(action));
     }
-    
+
     col = col.with_spacer(theme::grid(3.0));
-    
+
     // Add Save and Reset buttons
-    col = col
-        .with_child(
-            Flex::row()
-                .with_child(
-                    Button::new("Save Settings").on_click(|_ctx, data: &mut AppState, _| {
-                        data.config.save();
-                        log::info!("Keybind settings saved");
-                    }),
-                )
-                .with_spacer(theme::grid(1.0))
-                .with_child(
-                    Button::new("Reset to Defaults").on_click(|_ctx, data: &mut AppState, _| {
-                        data.config.keybinds.reset_to_defaults();
-                        data.config.save();
-                        log::info!("Keybinds reset to defaults");
-                    }),
-                ),
-        );
-    
+    col = col.with_child(
+        Flex::row()
+            .with_child(
+                Button::new("Save Settings").on_click(|_ctx, data: &mut AppState, _| {
+                    data.config.save();
+                    log::info!("Keybind settings saved");
+                }),
+            )
+            .with_spacer(theme::grid(1.0))
+            .with_child(Button::new("Reset to Defaults").on_click(
+                |_ctx, data: &mut AppState, _| {
+                    data.config.keybinds.reset_to_defaults();
+                    data.config.save();
+                    log::info!("Keybinds reset to defaults");
+                },
+            )),
+    );
+
     col
 }
 

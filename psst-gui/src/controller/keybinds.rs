@@ -13,7 +13,12 @@ impl KeybindsController {
         Self
     }
 
-    fn handle_keybind_action(&self, ctx: &mut EventCtx, action: KeybindAction, data: &mut AppState) {
+    fn handle_keybind_action(
+        &self,
+        ctx: &mut EventCtx,
+        action: KeybindAction,
+        data: &mut AppState,
+    ) {
         match action {
             // Playback controls
             KeybindAction::PlayPause => {
@@ -120,30 +125,27 @@ where
         data: &mut AppState,
         env: &Env,
     ) {
-        match event {
-            Event::KeyDown(key_event) => {
-                // Check if this key event matches any configured keybind
-                if let Some(action) = data.config.keybinds.find_action(key_event) {
-                    // Handle certain actions that should not override default behavior
-                    let should_handle = match action {
-                        // Don't override Space and arrow keys if they're already being handled
-                        // by PlaybackController
-                        KeybindAction::PlayPause
-                        | KeybindAction::SeekForward
-                        | KeybindAction::SeekBackward
-                        | KeybindAction::Next
-                        | KeybindAction::Previous => false,
-                        _ => true,
-                    };
+        if let Event::KeyDown(key_event) = event {
+            // Check if this key event matches any configured keybind
+            if let Some(action) = data.config.keybinds.find_action(key_event) {
+                // Handle certain actions that should not override default behavior
+                let should_handle = match action {
+                    // Don't override Space and arrow keys if they're already being handled
+                    // by PlaybackController
+                    KeybindAction::PlayPause
+                    | KeybindAction::SeekForward
+                    | KeybindAction::SeekBackward
+                    | KeybindAction::Next
+                    | KeybindAction::Previous => false,
+                    _ => true,
+                };
 
-                    if should_handle {
-                        self.handle_keybind_action(ctx, action, data);
-                        ctx.set_handled();
-                        return;
-                    }
+                if should_handle {
+                    self.handle_keybind_action(ctx, action, data);
+                    ctx.set_handled();
+                    return;
                 }
             }
-            _ => {}
         }
 
         child.event(ctx, event, data, env);

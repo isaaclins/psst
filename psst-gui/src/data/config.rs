@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Nav, Promise, QueueBehavior, SliderScrollScale, UpdateInfo, UpdatePreferences};
 use crate::ui::theme;
-use druid::{Code, KbKey};
+use druid::KbKey;
 
 #[derive(Clone, Debug, Data, Lens)]
 pub struct Preferences {
@@ -143,7 +143,7 @@ pub enum KeybindAction {
     VolumeUp,
     VolumeDown,
     Stop,
-    
+
     // Navigation
     NavigateHome,
     NavigateSavedTracks,
@@ -152,7 +152,7 @@ pub enum KeybindAction {
     NavigateSearch,
     NavigateBack,
     NavigateRefresh,
-    
+
     // UI Controls
     ToggleSidebar,
     ToggleLyrics,
@@ -160,7 +160,7 @@ pub enum KeybindAction {
     CloseWindow,
     ToggleFinder,
     FocusSearch,
-    
+
     // Queue controls
     QueueBehaviorSequential,
     QueueBehaviorRandom,
@@ -218,10 +218,10 @@ impl KeyCombination {
             modifiers,
         }
     }
-    
+
     pub fn display_string(&self) -> String {
         let mut parts = Vec::new();
-        
+
         for modifier in &self.modifiers {
             match modifier {
                 KeyModifier::Ctrl => parts.push("Ctrl"),
@@ -235,35 +235,35 @@ impl KeyCombination {
                 }
             }
         }
-        
+
         parts.push(&self.key);
         parts.join("+")
     }
-    
+
     pub fn matches(&self, key_event: &druid::KeyEvent) -> bool {
         // Check if the key matches
         let key_matches = match &key_event.key {
             KbKey::Character(c) => c.as_str() == self.key,
             _ => self.key == format!("{:?}", key_event.key),
         };
-        
+
         // Check if the code matches (if specified)
         let code_matches = if let Some(ref expected_code) = self.code {
             format!("{:?}", key_event.code) == *expected_code
         } else {
             true
         };
-        
+
         if !key_matches && !code_matches {
             return false;
         }
-        
+
         // Check modifiers
         let has_ctrl = self.modifiers.contains(&KeyModifier::Ctrl);
         let has_alt = self.modifiers.contains(&KeyModifier::Alt);
         let has_shift = self.modifiers.contains(&KeyModifier::Shift);
         let has_meta = self.modifiers.contains(&KeyModifier::Meta);
-        
+
         key_event.mods.ctrl() == has_ctrl
             && key_event.mods.alt() == has_alt
             && key_event.mods.shift() == has_shift
@@ -295,19 +295,35 @@ impl KeybindsConfig {
                 },
                 Keybind {
                     action: KeybindAction::Next,
-                    combination: KeyCombination::new("ArrowRight".into(), Some("ArrowRight".into()), vec![KeyModifier::Shift]),
+                    combination: KeyCombination::new(
+                        "ArrowRight".into(),
+                        Some("ArrowRight".into()),
+                        vec![KeyModifier::Shift],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::Previous,
-                    combination: KeyCombination::new("ArrowLeft".into(), Some("ArrowLeft".into()), vec![KeyModifier::Shift]),
+                    combination: KeyCombination::new(
+                        "ArrowLeft".into(),
+                        Some("ArrowLeft".into()),
+                        vec![KeyModifier::Shift],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::SeekForward,
-                    combination: KeyCombination::new("ArrowRight".into(), Some("ArrowRight".into()), vec![]),
+                    combination: KeyCombination::new(
+                        "ArrowRight".into(),
+                        Some("ArrowRight".into()),
+                        vec![],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::SeekBackward,
-                    combination: KeyCombination::new("ArrowLeft".into(), Some("ArrowLeft".into()), vec![]),
+                    combination: KeyCombination::new(
+                        "ArrowLeft".into(),
+                        Some("ArrowLeft".into()),
+                        vec![],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::VolumeUp,
@@ -317,41 +333,71 @@ impl KeybindsConfig {
                     action: KeybindAction::VolumeDown,
                     combination: KeyCombination::new("-".into(), None, vec![]),
                 },
-                
                 // Navigation
                 Keybind {
                     action: KeybindAction::NavigateHome,
-                    combination: KeyCombination::new("h".into(), Some("KeyH".into()), vec![KeyModifier::Ctrl]),
+                    combination: KeyCombination::new(
+                        "h".into(),
+                        Some("KeyH".into()),
+                        vec![KeyModifier::Ctrl],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::NavigateSavedTracks,
-                    combination: KeyCombination::new("t".into(), Some("KeyT".into()), vec![KeyModifier::Ctrl]),
+                    combination: KeyCombination::new(
+                        "t".into(),
+                        Some("KeyT".into()),
+                        vec![KeyModifier::Ctrl],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::NavigateSavedAlbums,
-                    combination: KeyCombination::new("a".into(), Some("KeyA".into()), vec![KeyModifier::Ctrl]),
+                    combination: KeyCombination::new(
+                        "a".into(),
+                        Some("KeyA".into()),
+                        vec![KeyModifier::Ctrl],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::NavigateShows,
-                    combination: KeyCombination::new("p".into(), Some("KeyP".into()), vec![KeyModifier::Ctrl]),
+                    combination: KeyCombination::new(
+                        "p".into(),
+                        Some("KeyP".into()),
+                        vec![KeyModifier::Ctrl],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::NavigateSearch,
-                    combination: KeyCombination::new("f".into(), Some("KeyF".into()), vec![KeyModifier::Ctrl]),
+                    combination: KeyCombination::new(
+                        "f".into(),
+                        Some("KeyF".into()),
+                        vec![KeyModifier::Ctrl],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::NavigateBack,
-                    combination: KeyCombination::new("Backspace".into(), Some("Backspace".into()), vec![]),
+                    combination: KeyCombination::new(
+                        "Backspace".into(),
+                        Some("Backspace".into()),
+                        vec![],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::NavigateRefresh,
-                    combination: KeyCombination::new("r".into(), Some("KeyR".into()), vec![KeyModifier::Meta]),
+                    combination: KeyCombination::new(
+                        "r".into(),
+                        Some("KeyR".into()),
+                        vec![KeyModifier::Meta],
+                    ),
                 },
-                
                 // UI Controls
                 Keybind {
                     action: KeybindAction::ToggleLyrics,
-                    combination: KeyCombination::new("l".into(), Some("KeyL".into()), vec![KeyModifier::Ctrl]),
+                    combination: KeyCombination::new(
+                        "l".into(),
+                        Some("KeyL".into()),
+                        vec![KeyModifier::Ctrl],
+                    ),
                 },
                 Keybind {
                     action: KeybindAction::OpenPreferences,
@@ -359,12 +405,16 @@ impl KeybindsConfig {
                 },
                 Keybind {
                     action: KeybindAction::ToggleFinder,
-                    combination: KeyCombination::new("f".into(), Some("KeyF".into()), vec![KeyModifier::Meta]),
+                    combination: KeyCombination::new(
+                        "f".into(),
+                        Some("KeyF".into()),
+                        vec![KeyModifier::Meta],
+                    ),
                 },
             ],
         }
     }
-    
+
     pub fn find_action(&self, key_event: &druid::KeyEvent) -> Option<KeybindAction> {
         for keybind in &self.keybinds {
             if keybind.combination.matches(key_event) {
@@ -373,7 +423,7 @@ impl KeybindsConfig {
         }
         None
     }
-    
+
     pub fn reset_to_defaults(&mut self) {
         *self = Self::default_keybinds();
     }
@@ -821,11 +871,12 @@ mod tests {
     fn test_keybinds_default() {
         let keybinds = KeybindsConfig::default();
         assert!(!keybinds.keybinds.is_empty());
-        
+
         // Check that play/pause keybind exists
-        let has_play_pause = keybinds.keybinds.iter().any(|kb| {
-            matches!(kb.action, KeybindAction::PlayPause)
-        });
+        let has_play_pause = keybinds
+            .keybinds
+            .iter()
+            .any(|kb| matches!(kb.action, KeybindAction::PlayPause));
         assert!(has_play_pause);
     }
 
@@ -834,7 +885,7 @@ mod tests {
         let keybinds = KeybindsConfig::default();
         let json = serde_json::to_string(&keybinds).unwrap();
         let parsed: KeybindsConfig = serde_json::from_str(&json).unwrap();
-        
+
         // Check that we have the same number of keybinds
         assert_eq!(keybinds.keybinds.len(), parsed.keybinds.len());
     }
@@ -842,11 +893,11 @@ mod tests {
     #[test]
     fn test_keybinds_reset_to_defaults() {
         let mut keybinds = KeybindsConfig::default();
-        
+
         // Clear all keybinds
         keybinds.keybinds.clear();
         assert!(keybinds.keybinds.is_empty());
-        
+
         // Reset to defaults
         keybinds.reset_to_defaults();
         assert!(!keybinds.keybinds.is_empty());
@@ -854,20 +905,13 @@ mod tests {
 
     #[test]
     fn test_key_combination_display_string() {
-        let combo = KeyCombination::new(
-            "Space".into(),
-            Some("Space".into()),
-            vec![],
-        );
+        let combo = KeyCombination::new("Space".into(), Some("Space".into()), vec![]);
         assert_eq!(combo.display_string(), "Space");
-        
-        let combo_with_ctrl = KeyCombination::new(
-            "t".into(),
-            Some("KeyT".into()),
-            vec![KeyModifier::Ctrl],
-        );
+
+        let combo_with_ctrl =
+            KeyCombination::new("t".into(), Some("KeyT".into()), vec![KeyModifier::Ctrl]);
         assert_eq!(combo_with_ctrl.display_string(), "Ctrl+t");
-        
+
         let combo_with_multiple = KeyCombination::new(
             "f".into(),
             Some("KeyF".into()),
@@ -880,6 +924,9 @@ mod tests {
     fn test_keybind_action_display_names() {
         assert_eq!(KeybindAction::PlayPause.display_name(), "Play/Pause");
         assert_eq!(KeybindAction::Next.display_name(), "Next Track");
-        assert_eq!(KeybindAction::NavigateHome.display_name(), "Navigate to Home");
+        assert_eq!(
+            KeybindAction::NavigateHome.display_name(),
+            "Navigate to Home"
+        );
     }
 }
