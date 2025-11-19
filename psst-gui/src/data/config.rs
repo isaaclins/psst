@@ -816,4 +816,70 @@ mod tests {
         assert_eq!(theme.font_family, "System UI");
         assert_eq!(theme.font_size, "13.0");
     }
+
+    #[test]
+    fn test_keybinds_default() {
+        let keybinds = KeybindsConfig::default();
+        assert!(!keybinds.keybinds.is_empty());
+        
+        // Check that play/pause keybind exists
+        let has_play_pause = keybinds.keybinds.iter().any(|kb| {
+            matches!(kb.action, KeybindAction::PlayPause)
+        });
+        assert!(has_play_pause);
+    }
+
+    #[test]
+    fn test_keybinds_serialization() {
+        let keybinds = KeybindsConfig::default();
+        let json = serde_json::to_string(&keybinds).unwrap();
+        let parsed: KeybindsConfig = serde_json::from_str(&json).unwrap();
+        
+        // Check that we have the same number of keybinds
+        assert_eq!(keybinds.keybinds.len(), parsed.keybinds.len());
+    }
+
+    #[test]
+    fn test_keybinds_reset_to_defaults() {
+        let mut keybinds = KeybindsConfig::default();
+        
+        // Clear all keybinds
+        keybinds.keybinds.clear();
+        assert!(keybinds.keybinds.is_empty());
+        
+        // Reset to defaults
+        keybinds.reset_to_defaults();
+        assert!(!keybinds.keybinds.is_empty());
+    }
+
+    #[test]
+    fn test_key_combination_display_string() {
+        let combo = KeyCombination::new(
+            "Space".into(),
+            Some("Space".into()),
+            vec![],
+        );
+        assert_eq!(combo.display_string(), "Space");
+        
+        let combo_with_ctrl = KeyCombination::new(
+            "t".into(),
+            Some("KeyT".into()),
+            vec![KeyModifier::Ctrl],
+        );
+        assert_eq!(combo_with_ctrl.display_string(), "Ctrl+t");
+        
+        let combo_with_multiple = KeyCombination::new(
+            "f".into(),
+            Some("KeyF".into()),
+            vec![KeyModifier::Ctrl, KeyModifier::Shift],
+        );
+        assert_eq!(combo_with_multiple.display_string(), "Ctrl+Shift+f");
+    }
+
+    #[test]
+    fn test_keybind_action_display_names() {
+        assert_eq!(KeybindAction::PlayPause.display_name(), "Play/Pause");
+        assert_eq!(KeybindAction::Next.display_name(), "Next Track");
+        assert_eq!(KeybindAction::NavigateHome.display_name(), "Navigate to Home");
+    }
 }
