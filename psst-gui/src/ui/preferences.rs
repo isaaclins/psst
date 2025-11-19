@@ -94,6 +94,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                     PreferencesTab::General => general_tab_widget().boxed(),
                     PreferencesTab::Appearance => appearance_tab_widget().boxed(),
                     PreferencesTab::Equalizer => equalizer_tab_widget().boxed(),
+                    PreferencesTab::Keybinds => keybinds_tab_widget().boxed(),
                     PreferencesTab::Account => {
                         account_tab_widget(AccountTab::InPreferences).boxed()
                     }
@@ -159,6 +160,12 @@ fn tabs_widget() -> impl Widget<AppState> {
             "Equalizer",
             &icons::MUSIC_NOTE,
             PreferencesTab::Equalizer,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Keybinds",
+            &icons::PREFERENCES,
+            PreferencesTab::Keybinds,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -1602,6 +1609,137 @@ fn updates_tab_widget() -> impl Widget<AppState> {
             .with_text_color(Color::rgb8(138, 180, 248)),
             SizedBox::empty(),
         ))
+}
+
+fn keybinds_tab_widget() -> impl Widget<AppState> {
+    use crate::data::config::{KeybindAction, KeybindsConfig};
+    
+    let mut col = Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true);
+    
+    col = col
+        .with_child(Label::new("Keyboard Shortcuts").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Label::new("Customize keyboard shortcuts for all actions. Changes are saved automatically.")
+                .with_text_color(theme::PLACEHOLDER_COLOR)
+                .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(3.0));
+    
+    // Add sections for different categories of keybinds
+    col = col
+        .with_child(Label::new("Playback Controls").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0));
+    
+    // Add keybind items for playback controls
+    let playback_actions = vec![
+        KeybindAction::PlayPause,
+        KeybindAction::Next,
+        KeybindAction::Previous,
+        KeybindAction::SeekForward,
+        KeybindAction::SeekBackward,
+        KeybindAction::VolumeUp,
+        KeybindAction::VolumeDown,
+    ];
+    
+    for action in playback_actions {
+        col = col.with_child(keybind_row(action));
+    }
+    
+    col = col.with_spacer(theme::grid(3.0));
+    
+    // Navigation controls
+    col = col
+        .with_child(Label::new("Navigation").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0));
+    
+    let nav_actions = vec![
+        KeybindAction::NavigateHome,
+        KeybindAction::NavigateSavedTracks,
+        KeybindAction::NavigateSavedAlbums,
+        KeybindAction::NavigateShows,
+        KeybindAction::NavigateSearch,
+        KeybindAction::NavigateBack,
+        KeybindAction::NavigateRefresh,
+    ];
+    
+    for action in nav_actions {
+        col = col.with_child(keybind_row(action));
+    }
+    
+    col = col.with_spacer(theme::grid(3.0));
+    
+    // UI Controls
+    col = col
+        .with_child(Label::new("UI Controls").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0));
+    
+    let ui_actions = vec![
+        KeybindAction::ToggleLyrics,
+        KeybindAction::OpenPreferences,
+        KeybindAction::ToggleFinder,
+    ];
+    
+    for action in ui_actions {
+        col = col.with_child(keybind_row(action));
+    }
+    
+    col = col.with_spacer(theme::grid(3.0));
+    
+    // Add Save and Reset buttons
+    col = col
+        .with_child(
+            Flex::row()
+                .with_child(
+                    Button::new("Save Settings").on_click(|_ctx, data: &mut AppState, _| {
+                        data.config.save();
+                        log::info!("Keybind settings saved");
+                    }),
+                )
+                .with_spacer(theme::grid(1.0))
+                .with_child(
+                    Button::new("Reset to Defaults").on_click(|_ctx, data: &mut AppState, _| {
+                        data.config.keybinds.reset_to_defaults();
+                        data.config.save();
+                        log::info!("Keybinds reset to defaults");
+                    }),
+                ),
+        );
+    
+    col
+}
+
+fn keybind_row(action: crate::data::config::KeybindAction) -> impl Widget<AppState> {
+    Flex::row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .with_child(
+            Label::new(action.display_name())
+                .with_text_size(theme::TEXT_SIZE_SMALL)
+                .fix_width(theme::grid(25.0))
+                .align_left(),
+        )
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Label::dynamic(move |data: &AppState, _| {
+                // Find the keybind for this action
+                for keybind in &data.config.keybinds.keybinds {
+                    if keybind.action == action {
+                        return keybind.combination.display_string();
+                    }
+                }
+                "Not Set".to_string()
+            })
+            .with_text_size(theme::TEXT_SIZE_SMALL)
+            .with_text_color(theme::PLACEHOLDER_COLOR)
+            .padding((theme::grid(1.0), theme::grid(0.5)))
+            .background(theme::BACKGROUND_DARK)
+            .rounded(theme::BUTTON_BORDER_RADIUS)
+            .fix_width(theme::grid(15.0))
+            .center(),
+        )
+        .padding((0.0, theme::grid(0.5), 0.0, 0.0))
 }
 
 fn about_tab_widget() -> impl Widget<AppState> {

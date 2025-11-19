@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Nav, Promise, QueueBehavior, SliderScrollScale, UpdateInfo, UpdatePreferences};
 use crate::ui::theme;
+use druid::{Code, KbKey};
 
 #[derive(Clone, Debug, Data, Lens)]
 pub struct Preferences {
@@ -54,6 +55,7 @@ pub enum PreferencesTab {
     General,
     Appearance,
     Equalizer,
+    Keybinds,
     Account,
     DiscordPresence,
     Cache,
@@ -118,6 +120,271 @@ fn default_sidebar_visible() -> bool {
     true
 }
 
+/// Represents a keyboard modifier key
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum KeyModifier {
+    Ctrl,
+    Alt,
+    Shift,
+    Meta,
+}
+
+/// Represents a single keybind action
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum KeybindAction {
+    // Playback controls
+    PlayPause,
+    Play,
+    Pause,
+    Next,
+    Previous,
+    SeekForward,
+    SeekBackward,
+    VolumeUp,
+    VolumeDown,
+    Stop,
+    
+    // Navigation
+    NavigateHome,
+    NavigateSavedTracks,
+    NavigateSavedAlbums,
+    NavigateShows,
+    NavigateSearch,
+    NavigateBack,
+    NavigateRefresh,
+    
+    // UI Controls
+    ToggleSidebar,
+    ToggleLyrics,
+    OpenPreferences,
+    CloseWindow,
+    ToggleFinder,
+    FocusSearch,
+    
+    // Queue controls
+    QueueBehaviorSequential,
+    QueueBehaviorRandom,
+    QueueBehaviorLoopTrack,
+    QueueBehaviorLoopAll,
+}
+
+impl KeybindAction {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            KeybindAction::PlayPause => "Play/Pause",
+            KeybindAction::Play => "Play",
+            KeybindAction::Pause => "Pause",
+            KeybindAction::Next => "Next Track",
+            KeybindAction::Previous => "Previous Track",
+            KeybindAction::SeekForward => "Seek Forward",
+            KeybindAction::SeekBackward => "Seek Backward",
+            KeybindAction::VolumeUp => "Volume Up",
+            KeybindAction::VolumeDown => "Volume Down",
+            KeybindAction::Stop => "Stop Playback",
+            KeybindAction::NavigateHome => "Navigate to Home",
+            KeybindAction::NavigateSavedTracks => "Navigate to Saved Tracks",
+            KeybindAction::NavigateSavedAlbums => "Navigate to Saved Albums",
+            KeybindAction::NavigateShows => "Navigate to Shows",
+            KeybindAction::NavigateSearch => "Navigate to Search",
+            KeybindAction::NavigateBack => "Navigate Back",
+            KeybindAction::NavigateRefresh => "Refresh Current Page",
+            KeybindAction::ToggleSidebar => "Toggle Sidebar",
+            KeybindAction::ToggleLyrics => "Toggle Lyrics",
+            KeybindAction::OpenPreferences => "Open Preferences",
+            KeybindAction::CloseWindow => "Close Window",
+            KeybindAction::ToggleFinder => "Toggle Find in Page",
+            KeybindAction::FocusSearch => "Focus Search Box",
+            KeybindAction::QueueBehaviorSequential => "Queue: Sequential",
+            KeybindAction::QueueBehaviorRandom => "Queue: Random",
+            KeybindAction::QueueBehaviorLoopTrack => "Queue: Loop Track",
+            KeybindAction::QueueBehaviorLoopAll => "Queue: Loop All",
+        }
+    }
+}
+
+/// Represents a key combination (key + modifiers)
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct KeyCombination {
+    pub key: String,
+    pub code: Option<String>,
+    pub modifiers: Vec<KeyModifier>,
+}
+
+impl KeyCombination {
+    pub fn new(key: String, code: Option<String>, modifiers: Vec<KeyModifier>) -> Self {
+        Self {
+            key,
+            code,
+            modifiers,
+        }
+    }
+    
+    pub fn display_string(&self) -> String {
+        let mut parts = Vec::new();
+        
+        for modifier in &self.modifiers {
+            match modifier {
+                KeyModifier::Ctrl => parts.push("Ctrl"),
+                KeyModifier::Alt => parts.push("Alt"),
+                KeyModifier::Shift => parts.push("Shift"),
+                KeyModifier::Meta => {
+                    #[cfg(target_os = "macos")]
+                    parts.push("Cmd");
+                    #[cfg(not(target_os = "macos"))]
+                    parts.push("Win");
+                }
+            }
+        }
+        
+        parts.push(&self.key);
+        parts.join("+")
+    }
+    
+    pub fn matches(&self, key_event: &druid::KeyEvent) -> bool {
+        // Check if the key matches
+        let key_matches = match &key_event.key {
+            KbKey::Character(c) => c.as_str() == self.key,
+            _ => self.key == format!("{:?}", key_event.key),
+        };
+        
+        // Check if the code matches (if specified)
+        let code_matches = if let Some(ref expected_code) = self.code {
+            format!("{:?}", key_event.code) == *expected_code
+        } else {
+            true
+        };
+        
+        if !key_matches && !code_matches {
+            return false;
+        }
+        
+        // Check modifiers
+        let has_ctrl = self.modifiers.contains(&KeyModifier::Ctrl);
+        let has_alt = self.modifiers.contains(&KeyModifier::Alt);
+        let has_shift = self.modifiers.contains(&KeyModifier::Shift);
+        let has_meta = self.modifiers.contains(&KeyModifier::Meta);
+        
+        key_event.mods.ctrl() == has_ctrl
+            && key_event.mods.alt() == has_alt
+            && key_event.mods.shift() == has_shift
+            && key_event.mods.meta() == has_meta
+    }
+}
+
+/// Represents a single keybind mapping
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Keybind {
+    pub action: KeybindAction,
+    pub combination: KeyCombination,
+}
+
+/// Configuration for all keybinds
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KeybindsConfig {
+    pub keybinds: Vec<Keybind>,
+}
+
+impl KeybindsConfig {
+    pub fn default_keybinds() -> Self {
+        Self {
+            keybinds: vec![
+                // Playback controls
+                Keybind {
+                    action: KeybindAction::PlayPause,
+                    combination: KeyCombination::new("Space".into(), Some("Space".into()), vec![]),
+                },
+                Keybind {
+                    action: KeybindAction::Next,
+                    combination: KeyCombination::new("ArrowRight".into(), Some("ArrowRight".into()), vec![KeyModifier::Shift]),
+                },
+                Keybind {
+                    action: KeybindAction::Previous,
+                    combination: KeyCombination::new("ArrowLeft".into(), Some("ArrowLeft".into()), vec![KeyModifier::Shift]),
+                },
+                Keybind {
+                    action: KeybindAction::SeekForward,
+                    combination: KeyCombination::new("ArrowRight".into(), Some("ArrowRight".into()), vec![]),
+                },
+                Keybind {
+                    action: KeybindAction::SeekBackward,
+                    combination: KeyCombination::new("ArrowLeft".into(), Some("ArrowLeft".into()), vec![]),
+                },
+                Keybind {
+                    action: KeybindAction::VolumeUp,
+                    combination: KeyCombination::new("+".into(), None, vec![]),
+                },
+                Keybind {
+                    action: KeybindAction::VolumeDown,
+                    combination: KeyCombination::new("-".into(), None, vec![]),
+                },
+                
+                // Navigation
+                Keybind {
+                    action: KeybindAction::NavigateHome,
+                    combination: KeyCombination::new("h".into(), Some("KeyH".into()), vec![KeyModifier::Ctrl]),
+                },
+                Keybind {
+                    action: KeybindAction::NavigateSavedTracks,
+                    combination: KeyCombination::new("t".into(), Some("KeyT".into()), vec![KeyModifier::Ctrl]),
+                },
+                Keybind {
+                    action: KeybindAction::NavigateSavedAlbums,
+                    combination: KeyCombination::new("a".into(), Some("KeyA".into()), vec![KeyModifier::Ctrl]),
+                },
+                Keybind {
+                    action: KeybindAction::NavigateShows,
+                    combination: KeyCombination::new("p".into(), Some("KeyP".into()), vec![KeyModifier::Ctrl]),
+                },
+                Keybind {
+                    action: KeybindAction::NavigateSearch,
+                    combination: KeyCombination::new("f".into(), Some("KeyF".into()), vec![KeyModifier::Ctrl]),
+                },
+                Keybind {
+                    action: KeybindAction::NavigateBack,
+                    combination: KeyCombination::new("Backspace".into(), Some("Backspace".into()), vec![]),
+                },
+                Keybind {
+                    action: KeybindAction::NavigateRefresh,
+                    combination: KeyCombination::new("r".into(), Some("KeyR".into()), vec![KeyModifier::Meta]),
+                },
+                
+                // UI Controls
+                Keybind {
+                    action: KeybindAction::ToggleLyrics,
+                    combination: KeyCombination::new("l".into(), Some("KeyL".into()), vec![KeyModifier::Ctrl]),
+                },
+                Keybind {
+                    action: KeybindAction::OpenPreferences,
+                    combination: KeyCombination::new(",".into(), None, vec![KeyModifier::Meta]),
+                },
+                Keybind {
+                    action: KeybindAction::ToggleFinder,
+                    combination: KeyCombination::new("f".into(), Some("KeyF".into()), vec![KeyModifier::Meta]),
+                },
+            ],
+        }
+    }
+    
+    pub fn find_action(&self, key_event: &druid::KeyEvent) -> Option<KeybindAction> {
+        for keybind in &self.keybinds {
+            if keybind.combination.matches(key_event) {
+                return Some(keybind.action.clone());
+            }
+        }
+        None
+    }
+    
+    pub fn reset_to_defaults(&mut self) {
+        *self = Self::default_keybinds();
+    }
+}
+
+impl Default for KeybindsConfig {
+    fn default() -> Self {
+        Self::default_keybinds()
+    }
+}
+
 #[derive(Clone, Debug, Data, Lens, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -167,6 +434,9 @@ pub struct Config {
     pub custom_equalizer_presets: Vec<EqualizerPreset>,
     #[serde(default)]
     pub update_preferences: UpdatePreferences,
+    #[data(ignore)]
+    #[serde(default)]
+    pub keybinds: KeybindsConfig,
 }
 
 impl Default for Config {
@@ -203,6 +473,7 @@ impl Default for Config {
             equalizer: Default::default(),
             custom_equalizer_presets: Vec::new(),
             update_preferences: Default::default(),
+            keybinds: Default::default(),
         }
     }
 }
