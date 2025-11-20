@@ -110,6 +110,33 @@ impl KeybindsController {
                 ctx.submit_command(cmd::PLAY_QUEUE_BEHAVIOR.with(QueueBehavior::LoopAll));
             }
         }
+
+        self.post_action_feedback(data, action);
+    }
+
+    fn post_action_feedback(&self, data: &mut AppState, action: KeybindAction) {
+        if let Some(message) = Self::feedback_message(action, data) {
+            data.info_alert(message);
+        }
+    }
+
+    fn feedback_message(action: KeybindAction, data: &AppState) -> Option<String> {
+        let message = match action {
+            KeybindAction::VolumeUp | KeybindAction::VolumeDown => {
+                let volume = (data.playback.volume * 100.0).round() as i32;
+                format!("Volume: {volume}%")
+            }
+            KeybindAction::ToggleSidebar => {
+                if data.config.sidebar_visible {
+                    "Sidebar visible".to_string()
+                } else {
+                    "Sidebar hidden".to_string()
+                }
+            }
+            _ => format!("{} triggered", action.display_name()),
+        };
+
+        Some(message)
     }
 }
 
@@ -125,6 +152,14 @@ where
         data: &mut AppState,
         env: &Env,
     ) {
+        if let Event::Command(cmd) = event {
+            if let Some(action) = cmd.get(cmd::PERFORM_KEYBIND_ACTION) {
+                self.handle_keybind_action(ctx, *action, data);
+                ctx.set_handled();
+                return;
+            }
+        }
+
         if let Event::KeyDown(key_event) = event {
             // Check if this key event matches any configured keybind
             if let Some(action) = data.config.keybinds.find_action(key_event) {

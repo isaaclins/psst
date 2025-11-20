@@ -8,7 +8,7 @@ use std::{
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::OpenOptionsExt;
 
-use druid::{Data, Lens, Size};
+use druid::{keyboard_types::Code, Data, HotKey, KbKey, Lens, RawMods, Size};
 use platform_dirs::AppDirs;
 use psst_core::{
     audio::equalizer::{EqualizerConfig, EqualizerPreset},
@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 
 use super::{Nav, Promise, QueueBehavior, SliderScrollScale, UpdateInfo, UpdatePreferences};
 use crate::ui::theme;
-use druid::KbKey;
 
 #[derive(Clone, Debug, Data, Lens)]
 pub struct Preferences {
@@ -35,6 +34,10 @@ pub struct Preferences {
     pub checking_update: bool,
     pub installing_update: bool,
     pub update_install_status: Option<String>,
+    pub active_keybind_capture: Option<KeybindAction>,
+    pub keybind_capture_display: Option<String>,
+    pub keybind_capture_error: Option<String>,
+    pub keybind_menu_revision: u64,
 }
 
 impl Preferences {
@@ -43,6 +46,10 @@ impl Preferences {
         self.auth.result.clear();
         self.auth.lastfm_api_key_input.clear();
         self.auth.lastfm_api_secret_input.clear();
+        self.active_keybind_capture = None;
+        self.keybind_capture_display = None;
+        self.keybind_capture_error = None;
+        self.keybind_menu_revision = self.keybind_menu_revision.wrapping_add(1);
     }
 
     pub fn measure_cache_usage() -> Option<u64> {
@@ -130,7 +137,7 @@ pub enum KeyModifier {
 }
 
 /// Represents a single keybind action
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, Data)]
 pub enum KeybindAction {
     // Playback controls
     PlayPause,
@@ -219,6 +226,57 @@ impl KeyCombination {
         }
     }
 
+    pub fn from_key_event(key_event: &druid::KeyEvent) -> Option<Self> {
+        if Self::is_modifier_key(&key_event.key) {
+            return None;
+        }
+
+        let key = match &key_event.key {
+            KbKey::Character(ref c) => {
+                if c == " " {
+                    "Space".to_string()
+                } else {
+                    c.clone()
+                }
+            }
+            other => format!("{:?}", other),
+        };
+
+        let code = match key_event.code {
+            Code::Unidentified => None,
+            other => Some(format!("{:?}", other)),
+        };
+
+        let mut modifiers = Vec::new();
+        if key_event.mods.ctrl() {
+            modifiers.push(KeyModifier::Ctrl);
+        }
+        if key_event.mods.alt() {
+            modifiers.push(KeyModifier::Alt);
+        }
+        if key_event.mods.shift() {
+            modifiers.push(KeyModifier::Shift);
+        }
+        if key_event.mods.meta() {
+            modifiers.push(KeyModifier::Meta);
+        }
+
+        Some(Self::new(key, code, modifiers))
+    }
+
+    fn is_modifier_key(key: &KbKey) -> bool {
+        matches!(
+            key,
+            KbKey::Shift
+                | KbKey::Alt
+                | KbKey::Control
+                | KbKey::Meta
+                | KbKey::Super
+                | KbKey::Hyper
+                | KbKey::CapsLock
+        )
+    }
+
     pub fn display_string(&self) -> String {
         let mut parts = Vec::new();
 
@@ -238,6 +296,54 @@ impl KeyCombination {
 
         parts.push(&self.key);
         parts.join("+")
+    }
+
+    pub fn to_hot_key(&self) -> Option<HotKey> {
+        let key = self.to_kb_key();
+        let mods = self.to_raw_mods();
+        Some(HotKey::new(mods, key))
+    }
+
+    fn to_kb_key(&self) -> KbKey {
+        match self.key.as_str() {
+            "Space" => KbKey::Character(" ".into()),
+            "ArrowLeft" => KbKey::ArrowLeft,
+            "ArrowRight" => KbKey::ArrowRight,
+            "ArrowUp" => KbKey::ArrowUp,
+            "ArrowDown" => KbKey::ArrowDown,
+            "Backspace" => KbKey::Backspace,
+            "Delete" => KbKey::Delete,
+            "Enter" | "Return" => KbKey::Enter,
+            "Tab" => KbKey::Tab,
+            "Escape" => KbKey::Escape,
+            other => KbKey::Character(other.to_string()),
+        }
+    }
+
+    fn to_raw_mods(&self) -> Option<RawMods> {
+        let has_ctrl = self.modifiers.contains(&KeyModifier::Ctrl);
+        let has_alt = self.modifiers.contains(&KeyModifier::Alt);
+        let has_shift = self.modifiers.contains(&KeyModifier::Shift);
+        let has_meta = self.modifiers.contains(&KeyModifier::Meta);
+
+        match (has_alt, has_ctrl, has_meta, has_shift) {
+            (false, false, false, false) => None,
+            (true, false, false, false) => Some(RawMods::Alt),
+            (false, true, false, false) => Some(RawMods::Ctrl),
+            (false, false, true, false) => Some(RawMods::Meta),
+            (false, false, false, true) => Some(RawMods::Shift),
+            (true, true, false, false) => Some(RawMods::AltCtrl),
+            (true, false, true, false) => Some(RawMods::AltMeta),
+            (true, false, false, true) => Some(RawMods::AltShift),
+            (false, true, true, false) => Some(RawMods::CtrlMeta),
+            (false, true, false, true) => Some(RawMods::CtrlShift),
+            (false, false, true, true) => Some(RawMods::MetaShift),
+            (true, true, true, false) => Some(RawMods::AltCtrlMeta),
+            (true, true, false, true) => Some(RawMods::AltCtrlShift),
+            (true, false, true, true) => Some(RawMods::AltMetaShift),
+            (false, true, true, true) => Some(RawMods::CtrlMetaShift),
+            (true, true, true, true) => Some(RawMods::AltCtrlMetaShift),
+        }
     }
 
     pub fn matches(&self, key_event: &druid::KeyEvent) -> bool {
@@ -422,6 +528,39 @@ impl KeybindsConfig {
             }
         }
         None
+    }
+
+    pub fn conflicting_action(
+        &self,
+        combination: &KeyCombination,
+        exclude_action: KeybindAction,
+    ) -> Option<KeybindAction> {
+        self.keybinds
+            .iter()
+            .find(|keybind| keybind.action != exclude_action && keybind.combination == *combination)
+            .map(|keybind| keybind.action)
+    }
+
+    pub fn set_keybind(&mut self, action: KeybindAction, combination: KeyCombination) {
+        if let Some(existing) = self
+            .keybinds
+            .iter_mut()
+            .find(|keybind| keybind.action == action)
+        {
+            existing.combination = combination;
+        } else {
+            self.keybinds.push(Keybind {
+                action,
+                combination,
+            });
+        }
+    }
+
+    pub fn get_keybind(&self, action: KeybindAction) -> Option<&KeyCombination> {
+        self.keybinds
+            .iter()
+            .find(|keybind| keybind.action == action)
+            .map(|keybind| &keybind.combination)
     }
 
     pub fn reset_to_defaults(&mut self) {
