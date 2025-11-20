@@ -10,7 +10,10 @@ use crate::ui::playlist::{
 use crate::ui::theme;
 use crate::{
     cmd,
-    data::{AppState, Config, UpdateInfo, UpdateInstallEvent, UpdateInstallPhase, UpdateInstaller},
+    data::{
+        AppState, Command as AppCommand, Config, UpdateInfo, UpdateInstallEvent, UpdateInstallPhase,
+        UpdateInstaller,
+    },
     token_utils::TokenUtils,
     ui,
     webapi::WebApi,
@@ -447,6 +450,30 @@ impl AppDelegate<AppState> for Delegate {
                     ctx.submit_command(commands::CLOSE_WINDOW.to(window_id));
                     return None;
                 }
+            }
+        }
+
+        if let Event::KeyDown(key_event) = &event {
+            if let Some(cmd) = data.config.keybinds.find_command(&key_event.key, &key_event.mods) {
+                let selector = match cmd {
+                    AppCommand::PlayPause => cmd::PLAY_PAUSE,
+                    AppCommand::NextTrack => cmd::NEXT_TRACK,
+                    AppCommand::PreviousTrack => cmd::PREVIOUS_TRACK,
+                    AppCommand::VolumeUp => cmd::VOLUME_UP,
+                    AppCommand::VolumeDown => cmd::VOLUME_DOWN,
+                    AppCommand::Mute => cmd::MUTE,
+                    AppCommand::Shuffle => cmd::TOGGLE_SHUFFLE,
+                    AppCommand::Repeat => cmd::TOGGLE_REPEAT,
+                    AppCommand::Search => cmd::NAVIGATE_TO_SEARCH,
+                    AppCommand::GoBack => cmd::NAVIGATE_BACK,
+                    AppCommand::GoHome => cmd::NAVIGATE_TO_HOME,
+                    AppCommand::ShowLyrics => cmd::TOGGLE_LYRICS,
+                    AppCommand::CloseWindow => commands::CLOSE_WINDOW,
+                    AppCommand::Quit => commands::QUIT_APP,
+                    AppCommand::Preferences => commands::SHOW_PREFERENCES,
+                };
+                ctx.submit_command(selector);
+                return None;
             }
         }
         Some(event)

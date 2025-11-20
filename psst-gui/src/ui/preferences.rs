@@ -7,8 +7,8 @@ use std::{
 use crate::{
     cmd,
     data::{
-        AppState, AudioQuality, Authentication, Config, CustomTheme, Preferences, PreferencesTab,
-        Promise, SliderScrollScale, Theme, UpdatePreferences,
+        AppState, AudioQuality, Authentication, Command, Config, CustomTheme, KeyCombination, Keybinds,
+        Preferences, PreferencesTab, Promise, SliderScrollScale, Theme, UpdatePreferences,
     },
     widget::{icons, Async, Border, Checkbox, MyWidgetExt},
 };
@@ -99,6 +99,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                     }
                     PreferencesTab::DiscordPresence => discord_presence_tab_widget().boxed(),
                     PreferencesTab::Cache => cache_tab_widget().boxed(),
+                    PreferencesTab::Keybinds => keybinds_tab_widget().boxed(),
                     PreferencesTab::Updates => updates_tab_widget().boxed(),
                     PreferencesTab::About => about_tab_widget().boxed(),
                 },
@@ -177,6 +178,12 @@ fn tabs_widget() -> impl Widget<AppState> {
             "Cache",
             &icons::STORAGE,
             PreferencesTab::Cache,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Keybinds",
+            &icons::KEYBOARD,
+            PreferencesTab::Keybinds,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -1630,4 +1637,55 @@ fn about_tab_widget() -> impl Widget<AppState> {
         .with_child(commit_hash)
         .with_child(build_time)
         .with_child(remote_url)
+}
+
+fn keybinds_tab_widget() -> impl Widget<AppState> {
+    Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true)
+        .with_child(Label::new("Keybinds").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Scroll::new(
+                Flex::column()
+                    .with_child(keybind_row("Play / Pause", Command::PlayPause))
+                    .with_child(keybind_row("Next Track", Command::NextTrack))
+                    .with_child(keybind_row("Previous Track", Command::PreviousTrack))
+                    .with_child(keybind_row("Volume Up", Command::VolumeUp))
+                    .with_child(keybind_row("Volume Down", Command::VolumeDown))
+                    .with_child(keybind_row("Mute", Command::Mute))
+                    .with_child(keybind_row("Seek Forward", Command::SeekForward))
+                    .with_child(keybind_row("Seek Backward", Command::SeekBackward))
+                    .with_child(keybind_row("Shuffle", Command::Shuffle))
+                    .with_child(keybind_row("Loop", Command::Loop))
+                    .with_child(keybind_row("Search", Command::Search))
+                    .with_child(keybind_row("Home", Command::Home))
+                    .with_child(keybind_row("Go Back", Command::GoBack))
+                    .with_child(keybind_row("Go Forward", Command::GoForward))
+                    .with_child(keybind_row("Copy Link", Command::CopyLink))
+                    .with_child(keybind_row("Quit", Command::Quit))
+            )
+            .vertical()
+        )
+}
+
+fn keybind_row(label: &'static str, cmd: Command) -> impl Widget<AppState> {
+    Flex::row()
+        .must_fill_main_axis(true)
+        .with_child(Label::new(label).with_text_color(theme::PLACEHOLDER_COLOR))
+        .with_flex_spacer(1.0)
+        .with_child(
+            Label::dynamic(move |data: &AppState, _| {
+                if let Some(kb) = data.config.keybinds.get(&cmd) {
+                    kb.to_string()
+                } else {
+                    "None".to_string()
+                }
+            })
+            .with_font(theme::UI_FONT_MONO)
+            .padding(theme::grid(1.0))
+            .background(theme::BACKGROUND_DARK)
+            .rounded(theme::BUTTON_BORDER_RADIUS)
+        )
+        .padding(theme::grid(1.0))
 }

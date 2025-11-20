@@ -15,7 +15,10 @@ mod slider_scroll_scale;
 mod track;
 mod update_checker;
 mod user;
+mod keybinds;
 pub mod utils;
+
+pub use keybinds::{Command, KeyCombination, Keybinds};
 
 use std::{
     fmt::Display,

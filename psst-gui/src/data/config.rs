@@ -19,7 +19,7 @@ use psst_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{Nav, Promise, QueueBehavior, SliderScrollScale, UpdateInfo, UpdatePreferences};
+use super::{Keybinds, Nav, Promise, QueueBehavior, SliderScrollScale, UpdateInfo, UpdatePreferences};
 use crate::ui::theme;
 
 #[derive(Clone, Debug, Data, Lens)]
@@ -34,6 +34,8 @@ pub struct Preferences {
     pub checking_update: bool,
     pub installing_update: bool,
     pub update_install_status: Option<String>,
+    #[data(ignore)]
+    pub recording_keybind: Option<Command>,
 }
 
 impl Preferences {
@@ -167,6 +169,8 @@ pub struct Config {
     pub custom_equalizer_presets: Vec<EqualizerPreset>,
     #[serde(default)]
     pub update_preferences: UpdatePreferences,
+    #[serde(default)]
+    pub keybinds: Keybinds,
 }
 
 impl Default for Config {
@@ -203,6 +207,7 @@ impl Default for Config {
             equalizer: Default::default(),
             custom_equalizer_presets: Vec::new(),
             update_preferences: Default::default(),
+            keybinds: Default::default(),
         }
     }
 }
