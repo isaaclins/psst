@@ -4,7 +4,8 @@ use crate::error::Error;
 use crate::{
     cmd,
     controller::{
-        AfterDelay, AlertCleanupController, NavController, SessionController, SortController,
+        AfterDelay, AlertCleanupController, KeybindsController, NavController, SessionController,
+        SortController,
     },
     data::{
         config::SortOrder, AlbumLink, Alert, AlertStyle, AppState, Config, Nav, Playable, Playback,
@@ -219,6 +220,7 @@ fn root_widget() -> impl Widget<AppState> {
     ThemeScope::new(content)
         .controller(SessionController)
         .controller(NavController)
+        .controller(KeybindsController::new())
         .controller(SortController)
         .on_command_async(
             cmd::LOAD_TRACK_CREDITS,

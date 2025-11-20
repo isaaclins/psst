@@ -1,4 +1,4 @@
-use crate::data::{AlbumLink, PlaylistLink, Track};
+use crate::data::{config::KeybindAction, AlbumLink, PlaylistLink, Track};
 use druid::{Selector, WidgetId};
 use psst_core::{audio::equalizer::EqualizerConfig, item_id::ItemId, player::item::PlaybackItem};
 use std::sync::Arc;
@@ -29,6 +29,8 @@ pub const BEGIN_THEME_EXPORT: Selector = Selector::new("app.begin-theme-export")
 pub const TOGGLE_FINDER: Selector = Selector::new("app.show-finder");
 pub const FIND_IN_PLAYLIST: Selector<Find> = Selector::new("find-in-playlist");
 pub const FIND_IN_SAVED_TRACKS: Selector<Find> = Selector::new("find-in-saved-tracks");
+pub const PERFORM_KEYBIND_ACTION: Selector<KeybindAction> =
+    Selector::new("app.perform-keybind-action");
 
 // Session
 pub const SESSION_CONNECT: Selector = Selector::new("app.session-connect");

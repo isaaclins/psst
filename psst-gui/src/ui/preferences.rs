@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use crate::data::config::{KeyCombination, KeybindAction};
 use crate::{
     cmd,
     data::{
@@ -18,14 +19,16 @@ use druid::{
         Button, Controller, CrossAxisAlignment, Either, Flex, Label, LineBreaking,
         MainAxisAlignment, Painter, RadioGroup, Scroll, SizedBox, Slider, TextBox, ViewSwitcher,
     },
-    Color, Data, Env, Event, EventCtx, Insets, Lens, LensExt, LifeCycle, LifeCycleCtx,
-    RenderContext, Selector, Target, Widget, WidgetExt,
+    Color, Command, Data, Env, Event, EventCtx, Insets, KbKey, Lens, LensExt, LifeCycle,
+    LifeCycleCtx, RenderContext, Selector, Target, Widget, WidgetExt,
 };
 use psst_core::{connection::Credentials, lastfm, oauth, session::SessionConfig};
 
 use super::{icons::SvgIcon, theme};
 
 const CLEAR_CACHE: Selector = Selector::new("app.preferences.clear-cache");
+const KEYBIND_CAPTURE_CANCEL: Selector<KeybindAction> =
+    Selector::new("app.preferences.keybind-capture-cancel");
 
 // Helper function for creating a labeled input row
 fn make_input_row<L>(
@@ -94,6 +97,7 @@ pub fn preferences_widget() -> impl Widget<AppState> {
                     PreferencesTab::General => general_tab_widget().boxed(),
                     PreferencesTab::Appearance => appearance_tab_widget().boxed(),
                     PreferencesTab::Equalizer => equalizer_tab_widget().boxed(),
+                    PreferencesTab::Keybinds => keybinds_tab_widget().boxed(),
                     PreferencesTab::Account => {
                         account_tab_widget(AccountTab::InPreferences).boxed()
                     }
@@ -159,6 +163,12 @@ fn tabs_widget() -> impl Widget<AppState> {
             "Equalizer",
             &icons::MUSIC_NOTE,
             PreferencesTab::Equalizer,
+        ))
+        .with_default_spacer()
+        .with_child(tab_link_widget(
+            "Keybinds",
+            &icons::PREFERENCES,
+            PreferencesTab::Keybinds,
         ))
         .with_default_spacer()
         .with_child(tab_link_widget(
@@ -1602,6 +1612,316 @@ fn updates_tab_widget() -> impl Widget<AppState> {
             .with_text_color(Color::rgb8(138, 180, 248)),
             SizedBox::empty(),
         ))
+}
+
+fn keybinds_tab_widget() -> impl Widget<AppState> {
+    let mut col = Flex::column()
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .must_fill_main_axis(true);
+
+    col = col
+        .with_child(Label::new("Keyboard Shortcuts").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(2.0))
+        .with_child(
+            Label::new(
+                "Customize keyboard shortcuts for all actions. Changes are saved automatically.",
+            )
+            .with_text_color(theme::PLACEHOLDER_COLOR)
+            .with_line_break_mode(LineBreaking::WordWrap),
+        )
+        .with_spacer(theme::grid(3.0));
+
+    // Add sections for different categories of keybinds
+    col = col
+        .with_child(Label::new("Playback Controls").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0));
+
+    // Add keybind items for playback controls
+    let playback_actions = vec![
+        KeybindAction::PlayPause,
+        KeybindAction::Next,
+        KeybindAction::Previous,
+        KeybindAction::SeekForward,
+        KeybindAction::SeekBackward,
+        KeybindAction::VolumeUp,
+        KeybindAction::VolumeDown,
+    ];
+
+    for action in playback_actions {
+        col = col.with_child(keybind_row(action));
+    }
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    // Navigation controls
+    col = col
+        .with_child(Label::new("Navigation").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0));
+
+    let nav_actions = vec![
+        KeybindAction::NavigateHome,
+        KeybindAction::NavigateSavedTracks,
+        KeybindAction::NavigateSavedAlbums,
+        KeybindAction::NavigateShows,
+        KeybindAction::NavigateSearch,
+        KeybindAction::NavigateBack,
+        KeybindAction::NavigateRefresh,
+    ];
+
+    for action in nav_actions {
+        col = col.with_child(keybind_row(action));
+    }
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    // UI Controls
+    col = col
+        .with_child(Label::new("UI Controls").with_font(theme::UI_FONT_MEDIUM))
+        .with_spacer(theme::grid(1.0));
+
+    let ui_actions = vec![
+        KeybindAction::ToggleLyrics,
+        KeybindAction::OpenPreferences,
+        KeybindAction::ToggleFinder,
+    ];
+
+    for action in ui_actions {
+        col = col.with_child(keybind_row(action));
+    }
+
+    col = col.with_spacer(theme::grid(3.0));
+
+    // Add Save and Reset buttons
+    col = col.with_child(
+        Flex::row()
+            .with_child(
+                Button::new("Save Settings").on_click(|_ctx, data: &mut AppState, _| {
+                    data.config.save();
+                    log::info!("Keybind settings saved");
+                }),
+            )
+            .with_spacer(theme::grid(1.0))
+            .with_child(Button::new("Reset to Defaults").on_click(
+                |_ctx, data: &mut AppState, _| {
+                    data.config.keybinds.reset_to_defaults();
+                    data.preferences.keybind_menu_revision =
+                        data.preferences.keybind_menu_revision.wrapping_add(1);
+                    data.config.save();
+                    log::info!("Keybinds reset to defaults");
+                },
+            )),
+    );
+
+    col
+}
+
+fn keybind_row(action: KeybindAction) -> impl Widget<AppState> {
+    let background_action = action;
+    let label_action = action;
+    let controller_action = action;
+
+    let background = Painter::new(move |ctx: &mut druid::PaintCtx, data: &AppState, env| {
+        let rect = ctx.size().to_rect();
+        let color_key =
+            if data.preferences.active_keybind_capture.as_ref() == Some(&background_action) {
+                theme::BACKGROUND_LIGHT
+            } else {
+                theme::BACKGROUND_DARK
+            };
+        let color = env.get(color_key);
+        ctx.fill(rect, &color);
+    });
+
+    let text_action = action;
+
+    let capture_label = Label::dynamic(move |data: &AppState, _| {
+        if data.preferences.active_keybind_capture.as_ref() == Some(&label_action) {
+            let base = data
+                .preferences
+                .keybind_capture_display
+                .clone()
+                .unwrap_or_else(|| "Press keys… (Esc to finish)".to_string());
+            if let Some(err) = data.preferences.keybind_capture_error.clone() {
+                if base.is_empty() {
+                    err
+                } else {
+                    format!("{base} — {err}")
+                }
+            } else {
+                base
+            }
+        } else {
+            data.config
+                .keybinds
+                .keybinds
+                .iter()
+                .find(|keybind| keybind.action == label_action)
+                .map(|keybind| keybind.combination.display_string())
+                .unwrap_or_else(|| "Not Set".to_string())
+        }
+    })
+    .with_text_size(theme::TEXT_SIZE_SMALL)
+    .with_text_color(theme::TEXT_COLOR)
+    .env_scope(move |env, data: &AppState| {
+        let color = if data.preferences.active_keybind_capture.as_ref() == Some(&text_action)
+            && data.preferences.keybind_capture_error.is_some()
+        {
+            env.get(theme::RED)
+        } else {
+            env.get(theme::PLACEHOLDER_COLOR)
+        };
+        env.set(theme::TEXT_COLOR, color);
+    })
+    .padding((theme::grid(1.0), theme::grid(0.5)))
+    .background(background)
+    .rounded(theme::BUTTON_BORDER_RADIUS)
+    .fix_width(theme::grid(15.0))
+    .center()
+    .controller(KeybindCaptureController::new(controller_action));
+
+    Flex::row()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .with_child(
+            Label::new(action.display_name())
+                .with_text_size(theme::TEXT_SIZE_SMALL)
+                .fix_width(theme::grid(25.0))
+                .align_left(),
+        )
+        .with_spacer(theme::grid(2.0))
+        .with_child(capture_label)
+        .padding((0.0, theme::grid(0.5), 0.0, 0.0))
+}
+
+struct KeybindCaptureController {
+    action: KeybindAction,
+    capturing: bool,
+    pending: Option<KeyCombination>,
+}
+
+impl KeybindCaptureController {
+    fn new(action: KeybindAction) -> Self {
+        Self {
+            action,
+            capturing: false,
+            pending: None,
+        }
+    }
+
+    fn stop_capture(&mut self, ctx: &mut EventCtx, data: &mut AppState, apply: bool) {
+        if apply {
+            if let Some(combination) = self.pending.take() {
+                data.config.keybinds.set_keybind(self.action, combination);
+                data.config.save();
+                data.preferences.keybind_menu_revision =
+                    data.preferences.keybind_menu_revision.wrapping_add(1);
+            }
+        } else {
+            self.pending = None;
+        }
+
+        self.capturing = false;
+        data.preferences.active_keybind_capture = None;
+        data.preferences.keybind_capture_display = None;
+        data.preferences.keybind_capture_error = None;
+        ctx.set_active(false);
+        ctx.resign_focus();
+        ctx.request_paint();
+    }
+}
+
+impl<W> Controller<AppState, W> for KeybindCaptureController
+where
+    W: Widget<AppState>,
+{
+    fn event(
+        &mut self,
+        child: &mut W,
+        ctx: &mut EventCtx,
+        event: &Event,
+        data: &mut AppState,
+        env: &Env,
+    ) {
+        match event {
+            Event::MouseDown(mouse) if mouse.button.is_left() => {
+                self.capturing = true;
+                self.pending = None;
+                data.preferences.active_keybind_capture = Some(self.action);
+                data.preferences.keybind_capture_display =
+                    Some("Press keys… (Esc to finish)".to_string());
+                data.preferences.keybind_capture_error = None;
+                ctx.request_focus();
+                ctx.set_active(true);
+                ctx.request_paint();
+                ctx.set_handled();
+            }
+            Event::MouseUp(_) if self.capturing => {
+                ctx.set_active(false);
+            }
+            Event::KeyDown(key_event) if self.capturing => {
+                ctx.set_handled();
+
+                if key_event.key == KbKey::Escape {
+                    let apply = self.pending.is_some();
+                    self.stop_capture(ctx, data, apply);
+                    return;
+                }
+
+                if key_event.repeat {
+                    return;
+                }
+
+                if let Some(combination) = KeyCombination::from_key_event(key_event) {
+                    let display = combination.display_string();
+                    if let Some(conflict_action) = data
+                        .config
+                        .keybinds
+                        .conflicting_action(&combination, self.action)
+                    {
+                        data.preferences.keybind_capture_display = Some(display);
+                        data.preferences.keybind_capture_error =
+                            Some(format!("Conflicts with {}", conflict_action.display_name()));
+                        self.pending = None;
+                    } else {
+                        data.preferences.keybind_capture_display = Some(display);
+                        data.preferences.keybind_capture_error = None;
+                        self.pending = Some(combination);
+                    }
+                }
+                return;
+            }
+            Event::Command(cmd) if cmd.is(KEYBIND_CAPTURE_CANCEL) => {
+                if let Some(action) = cmd.get(KEYBIND_CAPTURE_CANCEL) {
+                    if *action == self.action && self.capturing {
+                        self.stop_capture(ctx, data, false);
+                        ctx.set_handled();
+                        return;
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        child.event(ctx, event, data, env);
+    }
+
+    fn lifecycle(
+        &mut self,
+        child: &mut W,
+        ctx: &mut LifeCycleCtx,
+        event: &LifeCycle,
+        data: &AppState,
+        env: &Env,
+    ) {
+        if matches!(event, LifeCycle::FocusChanged(false)) && self.capturing {
+            ctx.submit_command(Command::new(
+                KEYBIND_CAPTURE_CANCEL,
+                self.action,
+                Target::Widget(ctx.widget_id()),
+            ));
+        }
+
+        child.lifecycle(ctx, event, data, env);
+    }
 }
 
 fn about_tab_widget() -> impl Widget<AppState> {
